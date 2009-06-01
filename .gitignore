@@ -1,1 +1,2 @@
 *.beam
+ebin/rabpubsubhub.app
