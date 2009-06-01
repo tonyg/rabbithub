@@ -1,0 +1,106 @@
+/*
+ * e3e8e2
+ * 63d2dd
+ * 154050
+ * 6eaa52
+ * ccfafa
+ */
+
+body {
+    margin: 0;
+    padding: 0;
+    background: #154050;
+
+    font-family: Georgia, "Times New Roman", Times, serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: bold;
+}
+
+h1 {
+    margin: -10px;
+    padding: 0.5em;
+    text-align: right;
+    background: #154050;
+    background-image: url(background-banner.jpg);
+    background-repeat: repeat-y;
+    color: #ccfafa;
+    font-weight: normal;
+    letter-spacing: 4px;
+    font-size: 250%;
+}
+
+h2, h3, h4, h5, h6 {
+    background: #ccfafa;
+    margin-left: -10px;
+    margin-right: -10px;
+    padding-left: 10px;
+}
+
+h3, h4, h5, h6 {
+    padding-left: 30px;
+}
+
+div#outerContainer {
+    margin: 0 0 0 60px;
+    background: white;
+    width: 700;
+}
+
+div#innerContainer {
+    padding: 10px;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid #6eaa52;
+}
+
+ul.mainNav {
+	text-align: right;
+	float: right:
+	clear: both;
+	margin: 0;
+	color: white;
+	background: #154050;
+	border-bottom: 2px solid #6eaa52;
+	border-right: 2px solid #6eaa52;
+}
+.mainNav li {
+	display: inline;
+	border: none;
+	font-variant: small-caps;
+	border-left: 2px solid #6eaa52;
+	border-top: 2px solid #6eaa52;
+        padding: 0 1em 0 1em;
+}
+.mainNav :link, .mainNav :visited {
+	color: white;
+	text-decoration: none;
+}
+.mainNav :hover, .mainNav :active {
+	color: white;
+	text-decoration: underline;
+}
+
+th, td {
+	vertical-align: top;
+}
+
+th {
+	text-align: left;
+	border-bottom: 1px solid #6eaa52;
+}
+
+.meta-table {
+	width: 100%;
+}
+
+pre {
+	background: #e3e8e2;
+}
+
+.center {
+	text-align: center;
+}
