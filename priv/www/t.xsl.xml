@@ -19,7 +19,7 @@
  
   <xsl:template match="content">
     <li>
-      <xsl:value-of select="text()"/>
+      <xsl:value-of select="greeting"/>, <xsl:value-of select="username"/>!
     </li>
   </xsl:template>
 </xsl:stylesheet>
