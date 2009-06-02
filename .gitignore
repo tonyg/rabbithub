@@ -1,2 +1,3 @@
 *.beam
 ebin/rabpubsubhub.app
+Mnesia.*/
