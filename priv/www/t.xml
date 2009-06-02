@@ -1,0 +1,4 @@
+<?xml-stylesheet href="t.xsl.xml" type="text/xsl" ?>
+<root>
+  <content>Hello, world</content>
+</root>
