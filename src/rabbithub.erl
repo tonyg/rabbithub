@@ -1,4 +1,4 @@
--module(rabpubsubhub).
+-module(rabbithub).
 -export([start/0, stop/0]).
 -export([rabbit_node/0, rabbit_call/3]).
 
@@ -11,12 +11,12 @@ ensure_started(App) ->
     end.
         
 start() ->
-    rabpubsubhub_deps:ensure(),
+    rabbithub_deps:ensure(),
     ensure_started(crypto),
-    application:start(rabpubsubhub).
+    application:start(rabbithub).
 
 stop() ->
-    Res = application:stop(rabpubsubhub),
+    Res = application:stop(rabbithub),
     application:stop(crypto),
     Res.
 

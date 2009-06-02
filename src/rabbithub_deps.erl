@@ -4,7 +4,7 @@
 %%      loading path, and locate resources relative
 %%      to this application's path.
 
--module(rabpubsubhub_deps).
+-module(rabbithub_deps).
 -author('author <author@example.com>').
 
 -export([ensure/0, ensure/1]).

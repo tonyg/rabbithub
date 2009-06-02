@@ -1,15 +1,15 @@
--module(rabpubsubhub_app).
+-module(rabbithub_app).
 -behaviour(application).
 
--include("rabpubsubhub.hrl").
+-include("rabbithub.hrl").
 
 -export([start/2,stop/1]).
 
 start(_Type, _StartArgs) ->
-    rabpubsubhub_deps:ensure(),
+    rabbithub_deps:ensure(),
     ok = contact_rabbitmq(),
     ok = setup_schema(),
-    rabpubsubhub_sup:start_link().
+    rabbithub_sup:start_link().
 
 stop(_State) ->
     ok.
@@ -19,7 +19,7 @@ contact_rabbitmq() ->
                      undefined ->
                          [_NodeName, NodeHost] = string:tokens(atom_to_list(node()), "@"),
                          A = list_to_atom("rabbit@" ++ NodeHost),
-                         application:set_env(rabpubsubhub, rabbitmq_node, A),
+                         application:set_env(rabbithub, rabbitmq_node, A),
                          A;
                      {ok, A} ->
                          A
@@ -33,8 +33,8 @@ setup_schema() ->
         {error, {_, {already_exists, _}}} -> ok
     end,
     ok = mnesia:start(),
-    ok = create_table(rabpubsubhub_subscription,
-                      [{attributes, record_info(fields, rabpubsubhub_subscription)},
+    ok = create_table(rabbithub_subscription,
+                      [{attributes, record_info(fields, rabbithub_subscription)},
                        {disc_copies, [node()]}]),
     ok.
 

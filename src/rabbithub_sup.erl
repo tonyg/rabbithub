@@ -1,6 +1,6 @@
-%% @doc Supervisor for the rabpubsubhub application.
+%% @doc Supervisor for the rabbithub application.
 
--module(rabpubsubhub_sup).
+-module(rabbithub_sup).
 
 -behaviour(supervisor).
 
@@ -41,9 +41,9 @@ init([]) ->
     WebConfig = [
          {ip, Ip},
                  {port, 8000},
-                 {docroot, rabpubsubhub_deps:local_path(["priv", "www"])}],
-    Web = {rabpubsubhub_web,
-           {rabpubsubhub_web, start, [WebConfig]},
+                 {docroot, rabbithub_deps:local_path(["priv", "www"])}],
+    Web = {rabbithub_web,
+           {rabbithub_web, start, [WebConfig]},
            permanent, 5000, worker, dynamic},
 
     Processes = [Web],

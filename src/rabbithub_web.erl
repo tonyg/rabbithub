@@ -1,6 +1,6 @@
-%% @doc Web server for rabpubsubhub.
+%% @doc Web server for rabbithub.
 
--module(rabpubsubhub_web).
+-module(rabbithub_web).
 
 -export([start/1, stop/0, loop/2]).
 
@@ -85,9 +85,9 @@ check_auth_info(AuthInfo) ->
                        [U, P] -> {U, P};
                        [U] -> {U, ""}
                    end,
-    case catch rabpubsubhub:rabbit_call(rabbit_access_control, user_pass_login,
-                                        [list_to_binary(User),
-                                         list_to_binary(Pass)]) of
+    case catch rabbithub:rabbit_call(rabbit_access_control, user_pass_login,
+                                     [list_to_binary(User),
+                                      list_to_binary(Pass)]) of
         {'EXIT', {amqp, access_refused, _, _}} ->
             {error, access_refused};
         _ ->
