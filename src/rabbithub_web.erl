@@ -138,7 +138,6 @@ perform_request('POST', endpoint, '', _Username, queue, Resource, ParsedQuery, R
                       "true" -> true;
                       _ -> false
                   end,
-    error_logger:info_report({queue_post, Resource, Msg}),
     case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
         %% TODO use the record or think of something else other than this ugly solution:
         {ok, {amqqueue, _Name, _Durable, _AutoDelete, _Arguments, QPid}} ->
