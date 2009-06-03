@@ -1,8 +1,9 @@
 -module(rabbithub).
 
 -export([start/0, stop/0]).
+-export([canonical_scheme/0, canonical_host/0]).
 -export([rabbit_node/0, rabbit_call/3, r/2, rs/1]).
--export([respond_xml/5]).
+-export([respond_xml/5, binstring_guid/1]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 
@@ -23,6 +24,22 @@ stop() ->
     Res = application:stop(rabbithub),
     application:stop(crypto),
     Res.
+
+canonical_scheme() ->
+    case application:get_env(canonical_scheme) of
+        undefined ->
+            "http";
+        {ok, V} ->
+            V
+    end.
+
+canonical_host() ->
+    case application:get_env(canonical_host) of
+        undefined ->
+            "localhost";
+        {ok, V} ->
+            V
+    end.
 
 rabbit_node() ->
     {ok, N} = application:get_env(rabbitmq_node),
@@ -52,6 +69,9 @@ respond_xml(Req, StatusCode, Headers, StylesheetRelUrlOrNone, XmlElement) ->
                    xmerl:export_simple([XmlElement],
                                        xmerl_xml,
                                        [#xmlAttribute{name=prolog, value=""}])}).
+
+binstring_guid(PrefixStr) ->
+    rabbit_call(rabbit_guid, binstring_guid, [PrefixStr]).
 
 stylesheet_pi(none) ->
     [];

@@ -11,7 +11,7 @@ check_authentication(Req, Fun) ->
                 {ok, Username} ->
                     Fun(Username);
                 {error, _Reason} ->
-                    request_auth(Req)
+                    forbidden(Req)
             end
     end.
 
@@ -19,12 +19,11 @@ check_authorization(Req, Resource, Username, PermissionsRequired, Fun) ->
     CheckResults = [catch rabbithub:rabbit_call(rabbit_access_control, check_resource_access,
                                                 [list_to_binary(Username), Resource, P])
                     || P <- PermissionsRequired],
-    io:format("Check results: ~p~n", [CheckResults]),
     case lists:foldl(fun check_authorization_result/2, ok, CheckResults) of
         ok ->
             Fun();
         failed ->
-            Req:respond({403, [], "Forbidden"})
+            forbidden(Req)
     end.
 
 check_authorization_result({'EXIT', _}, ok) ->
@@ -33,6 +32,9 @@ check_authorization_result(ok, ok) ->
     ok;
 check_authorization_result(_, failed) ->
     failed.
+
+forbidden(Req) ->
+    Req:respond({403, [], "Forbidden"}).
 
 request_auth(Req) ->
     Req:respond({401, [{"WWW-Authenticate", "Basic realm=\"rabbitmq\""}],
