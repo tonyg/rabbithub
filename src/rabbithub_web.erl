@@ -18,8 +18,6 @@ stop() ->
 
 loop(Req, DocRoot) ->
     case Req:get(path) of
-        "/c/" ++ Capability ->
-            handle_cap_request(Capability, Req);
         "/x/" ++ ExchangeName ->
             handle_exchange_request(ExchangeName, Req);
         "/q/" ++ QueueName ->
@@ -47,9 +45,6 @@ loop(Req, DocRoot) ->
     end.
 
 %% Internal API
-
-handle_cap_request(Capability, Req) ->
-    Req:respond({200, [], "You accessed " ++ Capability}).
 
 handle_exchange_request(ExchangeName, Req) ->
     Req:respond({200, [], "You accessed " ++ ExchangeName}).
