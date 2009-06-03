@@ -1,0 +1,40 @@
+
+ISubscribable:
+
+  A subscribe(callback, topic, verify[, verify_token]) =
+    POST topic
+    <other parameters as fields>
+
+    --> 202 if verify
+      | 201 if not verify and sucessful; "Location" header with name
+    of binding
+      | 304 if already bound
+      | 401 Unauthorized
+      | 403 if e.g., topic is reserved for internal use
+      | 404 if topic does not exist (and will not be automatically
+    created)
+      | 410 if e.g., topic is black-listed
+      | 5xx
+
+  A unsubscribe(callback, topic, verify[, verify_token]) =
+    DELETE bindingName
+  | POST topic <other parameters as parameters>
+    --> 202 ? 
+      | 204 successful
+      | 4xx as above
+      | 5xx
+
+IEndpoint:
+  A publish(msg) =
+    POST topic <body of msg>
+    --> 202 (AMQP use-case?)
+      | 204 success
+      | 4xx
+      | 5xx
+
+  A gettoken() --> 200 | 4xx | 5xx
+  X subscribe(token) --> 2xx | 404 | 4xx | 5xx
+  X unsubscribe(token) --> 2xx | 404 | 4xx | 5xx
+
+
+Discovery interface?
