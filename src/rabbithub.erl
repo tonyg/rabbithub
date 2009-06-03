@@ -1,7 +1,7 @@
 -module(rabbithub).
 
 -export([start/0, stop/0]).
--export([rabbit_node/0, rabbit_call/3]).
+-export([rabbit_node/0, rabbit_call/3, r/2, rs/1]).
 -export([respond_xml/5]).
 
 -include_lib("xmerl/include/xmerl.hrl").
@@ -35,6 +35,14 @@ rabbit_call(M, F, A) ->
         V ->
             V
     end.
+
+r(ResourceType, ResourceName) when is_list(ResourceName) ->
+    r(ResourceType, list_to_binary(ResourceName));
+r(ResourceType, ResourceName) ->
+    rabbit_call(rabbit_misc, r, [<<"/">>, ResourceType, ResourceName]).
+
+rs(Resource) ->
+    rabbit_call(rabbit_misc, rs, [Resource]).
 
 respond_xml(Req, StatusCode, Headers, StylesheetRelUrlOrNone, XmlElement) ->
     Req:respond({StatusCode,

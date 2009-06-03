@@ -1,8 +1,8 @@
 -module(rabbithub_auth).
 
--export([check_auth/2]).
+-export([check_authentication/2, check_authorization/5]).
 
-check_auth(Req, Fun) ->
+check_authentication(Req, Fun) ->
     case Req:get_header_value("authorization") of
         undefined ->
             request_auth(Req);
@@ -14,6 +14,25 @@ check_auth(Req, Fun) ->
                     request_auth(Req)
             end
     end.
+
+check_authorization(Req, Resource, Username, PermissionsRequired, Fun) ->
+    CheckResults = [catch rabbithub:rabbit_call(rabbit_access_control, check_resource_access,
+                                                [list_to_binary(Username), Resource, P])
+                    || P <- PermissionsRequired],
+    io:format("Check results: ~p~n", [CheckResults]),
+    case lists:foldl(fun check_authorization_result/2, ok, CheckResults) of
+        ok ->
+            Fun();
+        failed ->
+            Req:respond({403, [], "Forbidden"})
+    end.
+
+check_authorization_result({'EXIT', _}, ok) ->
+    failed;
+check_authorization_result(ok, ok) ->
+    ok;
+check_authorization_result(_, failed) ->
+    failed.
 
 request_auth(Req) ->
     Req:respond({401, [{"WWW-Authenticate", "Basic realm=\"rabbitmq\""}],
