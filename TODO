@@ -12,4 +12,5 @@ ISubscribable:
 IEndpoint:
   A publish(msg) --> 202 | 204 | 4xx | 5xx
   A gettoken() --> 200 | 4xx | 5xx
-  X verify(token) --> 2xx | 404 | 4xx | 5xx
+  X subscribe(token) --> 2xx | 404 | 4xx | 5xx
+  X unsubscribe(token) --> 2xx | 404 | 4xx | 5xx
