@@ -1,0 +1,16 @@
+<xsl:stylesheet version="1.0"
+		xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+		xmlns="http://www.w3.org/1999/xhtml">
+  <xsl:output method="xml" indent="yes" encoding="UTF-8"/>
+ 
+  <xsl:template match="/application">
+    <html>
+      <head>
+	<title>Application "<xsl:value-of select="/application/name"/>" (<xsl:value-of select="/application/class"/>)</title>
+      </head>
+      <body>
+	<h1>Application "<xsl:value-of select="/application/name"/>" (<xsl:value-of select="/application/class"/>)</h1>
+      </body>
+    </html>
+  </xsl:template>
+</xsl:stylesheet>

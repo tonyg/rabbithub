@@ -4,6 +4,8 @@
 
 -export([start/1, stop/0, loop/2]).
 
+-define(APPLICATION_XSLT, "/static/application.xsl.xml").
+
 %% External API
 
 start(Options) ->
@@ -47,10 +49,10 @@ check_facet('POST', "endpoint", "", _) -> {auth_required, [write]};
 check_facet('PUT', "endpoint", "", queue) -> auth_not_required; %% special case: see implementation
 check_facet('PUT', "endpoint", "", _) -> {auth_required, [configure]};
 check_facet('DELETE', "endpoint", "", _) -> {auth_required, [configure]};
+check_facet('GET', "endpoint", "", _) -> auth_not_required;
 check_facet('GET', "endpoint", "generate_token", _) -> {auth_required, [write]};
 check_facet('GET', "endpoint", "subscribe", _) -> auth_not_required;
 check_facet('GET', "endpoint", "unsubscribe", _) -> auth_not_required;
-check_facet('GET', "endpoint", "", _) -> auth_not_required;
 check_facet('POST', "subscribe", "subscribe", _) -> {auth_required, [read]};
 check_facet('POST', "subscribe", "unsubscribe", _) -> {auth_required, []};
 check_facet(Method, Facet, HubMode, ResourceType) ->
@@ -133,6 +135,44 @@ canonical_url(Req, Path) ->
                               Path,
                               "",
                               ""}).
+
+application_descriptor(Name, Class, Parameters, Facets) ->
+    {application, [{name, [Name]},
+                   {class, [Class]},
+                   {parameters, [{parameter, [{name, N}, {value, V}], []}
+                                 || {N, V} <- Parameters]},
+                   {facets, Facets}]}.
+
+desc_action(HubMode, HttpMethod, Name, Description, Params) ->
+    {action, [{'hub.mode', HubMode}, {'http.method', HttpMethod}, {name, Name}],
+     [{description, [Description]} | Params]}.
+
+desc_param(Name, Location, Attrs, Description) ->
+    {parameter, [{name, Name}, {location, Location} | Attrs],
+     [{description, [Description]}]}.
+
+endpoint_facet(Req, Path) ->
+    {facet, [{href, canonical_url(Req, Path)}],
+     [{description, ["Facet permitting delivery of pubsub messages into the application."]},
+      desc_action("", "POST", "deliver",
+                  "Deliver a message to the endpoint.",
+                  [desc_param("hub.topic", "query", [{defaultvalue, ""}],
+                              "The routing key to use for the delivery."),
+                   desc_param("content-type", "headers", [],
+                              "The content-type of the body to deliver."),
+                   desc_param("body", "body", [],
+                              "The body of the HTTP request is used as the message to deliver.")]),
+      desc_action("", "PUT", "create",
+                  "Create an endpoint.",
+                  [desc_param("amqp.exchange_type", "query", [{defaultvalue, "fanout"},
+                                                              {optional, "true"}],
+                              "(When creating an exchange) Specifies the AMQP exchange type.")]),
+      desc_action("", "DELETE", "destroy",
+                  "Destroy the endpoint.",
+                  []),
+      desc_action("", "GET", "info",
+                  "Retrieve a description of the endpoint.",
+                  [])]}.
 
 %% FIXME use the #resource record or do something else:
 declare_queue(Resource = {resource, _VHost, queue, QueueNameBin}, _ParsedQuery, Req) ->
@@ -241,6 +281,34 @@ perform_request('DELETE', endpoint, '', queue, Resource, _ParsedQuery, Req) ->
             {ok, _PurgedMessageCount} = rabbithub:rabbit_call(rabbit_amqqueue, delete,
                                                               [Q, false, false]),
             Req:respond({204, [] ,[]})
+    end;
+
+perform_request('GET', endpoint, '', exchange, Resource, _ParsedQuery, Req) ->
+    case rabbithub:rabbit_call(rabbit_exchange, lookup, [Resource]) of
+        {error, not_found} ->
+            Req:not_found();
+        %% FIXME use the records or do something else:
+        {ok, {exchange, {resource, _VHost, exchange, XNameBin}, Type,
+              _Durable, _AutoDelete, _Arguments}} ->
+            XN = binary_to_list(XNameBin),
+            Xml = application_descriptor(XN, "amqp.exchange",
+                                         [{"amqp.exchange_type", atom_to_list(Type)}],
+                                         [endpoint_facet(Req, "/endpoint/x/" ++ XN)]),
+            rabbithub:respond_xml(Req, 200, [], ?APPLICATION_XSLT, Xml)
+    end;
+
+perform_request('GET', endpoint, '', queue, Resource, _ParsedQuery, Req) ->
+    case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
+        {error, not_found} ->
+            Req:not_found();
+        %% FIXME use the records or do something else:
+        {ok, {amqqueue, {resource, _VHost, queue, QNameBin},
+              _Durable, _AutoDelete, _Arguments, _QPid}} ->
+            QN = binary_to_list(QNameBin),
+            Xml = application_descriptor(QN, "amqp.queue",
+                                         [],
+                                         [endpoint_facet(Req, "/endpoint/q/" ++ QN)]),
+            rabbithub:respond_xml(Req, 200, [], ?APPLICATION_XSLT, Xml)
     end;
 
 perform_request(Method, Facet, HubMode, _ResourceType, Resource, ParsedQuery, Req) ->
