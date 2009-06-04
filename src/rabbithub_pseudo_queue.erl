@@ -41,6 +41,18 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource,
 handle_call(Request, _From, State) ->
     {stop, {unhandled_call, Request}, State}.
 
+handle_cast({deliver, _Txn = none, BasicMessage},
+            State = #state{subscription = Subscription}) ->
+    case rabbithub:deliver_via_post(Subscription, BasicMessage, []) of
+        {ok, _} ->
+            ok;
+        {error, Reason} ->
+            ok = rabbithub:error_and_unsub(Subscription,
+                                           {rabbithub_pseudo_queue, http_post_failure, Reason})
+    end,
+    {noreply, State};
+handle_cast(shutdown, State) ->
+    {stop, normal, State};
 handle_cast(Request, State) ->
     {stop, {unhandled_cast, Request}, State}.
 
@@ -56,55 +68,3 @@ terminate(_Reason, _State = #state{subscription = Subscription,
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-%%     receive
-%% 	{unavailable, JID, RKBin, AllResources} ->
-%% 	    {atomic, NewState} =
-%% 		mnesia:transaction(
-%% 		  fun () ->
-%% 			  NewPriorities =
-%% 			      case AllResources of
-%% 				  true ->
-%% 				      [E || E = {_, {J, _}} <- Priorities,
-%% 					    not jids_equal_upto_resource(J, JID)];
-%% 				  false ->
-%% 				      lists:keydelete({JID, RKBin}, 2, Priorities)
-%% 			      end,
-%% 			  case NewPriorities of
-%% 			      [] ->
-%% 				  mnesia:delete({rabbitmq_consumer_process,
-%% 						 State#consumer_state.queue}),
-%% 				  terminate;
-%% 			      _ ->
-%% 				  State#consumer_state{priorities = NewPriorities}
-%% 			  end
-%% 		  end),
-%% 	    case NewState of
-%% 		terminate ->
-%% 		    ?INFO_MSG("**** terminating consumer~n~p", [State#consumer_state.queue]),
-%% 		    consumer_done(State#consumer_state{priorities = []}),
-%% 		    done;
-%% 		_ ->
-%% 		    ?MODULE:consumer_main(NewState)
-%% 	    end;
-%% 	{presence, JID, RKBin, Priority} ->
-%% 	    NewPriorities = lists:keysort(1, keystore({JID, RKBin}, 2, Priorities,
-%% 						      {-Priority, {JID, RKBin}})),
-%% 	    ?MODULE:consumer_main(State#consumer_state{priorities = NewPriorities});
-%% 	{'$gen_cast', {deliver, _ConsumerTag, false, {_QName, QPid, _Id, _Redelivered, Msg}}} ->
-%% 	    #basic_message{exchange_name = #resource{name = XNameBin},
-%% 			   routing_key = RKBin,
-%% 			   content = #content{payload_fragments_rev = PayloadRev}} = Msg,
-%% 	    [{_, {TopPriorityJID, _}} | _] = Priorities,
-%% 	    send_message(jlib:make_jid(binary_to_list(XNameBin),
-%% 				       State#consumer_state.lserver,
-%% 				       binary_to_list(RKBin)),
-%% 			 TopPriorityJID,
-%% 			 "chat",
-%% 			 binary_to_list(list_to_binary(lists:reverse(PayloadRev)))),
-%% 	    rabbit_amqqueue:notify_sent(QPid, self()),
-%% 	    ?MODULE:consumer_main(State);
-%% 	Other ->
-%% 	    ?INFO_MSG("Consumer main ~p got~n~p", [State#consumer_state.queue, Other]),
-%% 	    ?MODULE:consumer_main(State)
-%%     end

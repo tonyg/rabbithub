@@ -35,54 +35,29 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource}) ->
             {stop, queue_not_found}
     end.
 
-error_and_delete_self(ErrorReport, State = #state{subscription = Subscription}) ->
-    error_logger:error_report(ErrorReport),
-    rabbithub_subscription:delete(Subscription),
-    {noreply, State}.
-
 handle_call(Request, _From, State) ->
     {stop, {unhandled_call, Request}, State}.
 
 handle_cast({deliver, _ConsumerTag, AckRequired,
-             {#resource{name = _QNameBin}, QPid, MsgId, Redelivered,
-              #basic_message{exchange_name = #resource{name = _ExchangeNameBin},
-                             routing_key = RoutingKeyBin,
-                             content = #content{payload_fragments_rev = PayloadRev}}}},
-            State = #state{subscription = #rabbithub_subscription{topic = TopicStr,
-                                                                  callback = CallbackStr}}) ->
-    ExtraQuery =
-        lists:flatten(io_lib:format("hub.topic=~s", [TopicStr])),
-    %% FIXME: get content properties out in some clean way
-    PayloadBin = list_to_binary(lists:reverse(PayloadRev)),
-    case simple_httpc:req("POST",
-                          CallbackStr,
-                          ExtraQuery,
-                          [{"Content-length", integer_to_list(size(PayloadBin))},
-                           {"X-AMQP-Routing-Key", RoutingKeyBin},
-                           {"X-AMQP-Redelivered", atom_to_list(Redelivered)}],
-                          PayloadBin) of
-        {ok, StatusCode, _StatusText, _Headers, _Body} ->
-            if
-                StatusCode >= 200 andalso StatusCode < 300 ->
-                    ok = rabbithub:rabbit_call(rabbit_amqqueue, notify_sent, [QPid, self()]),
-                    case AckRequired of
-                        true ->
-                            ok = rabbithub:rabbit_call(rabbit_amqqueue, ack,
-                                                       [QPid, none, [MsgId], self()]);
-                        false ->
-                            ok
-                    end,
-                    {noreply, State};
+             {_QNameResource, QPid, MsgId, Redelivered, BasicMessage}},
+            State = #state{subscription = Subscription}) ->
+    case rabbithub:deliver_via_post(Subscription,
+                                    BasicMessage,
+                                    [{"X-AMQP-Redelivered", atom_to_list(Redelivered)}]) of
+        {ok, _} ->
+            ok = rabbithub:rabbit_call(rabbit_amqqueue, notify_sent, [QPid, self()]),
+            case AckRequired of
                 true ->
-                    error_and_delete_self({rabbithub_consumer,
-                                           http_post_unexpected_status,
-                                           StatusCode}, State)
+                    ok = rabbithub:rabbit_call(rabbit_amqqueue, ack,
+                                               [QPid, none, [MsgId], self()]);
+                false ->
+                    ok
             end;
         {error, Reason} ->
-            error_and_delete_self({rabbithub_consumer,
-                                   http_post_failure,
-                                   Reason}, State)
-    end;
+            ok = rabbithub:error_and_unsub(Subscription,
+                                           {rabbithub_consumer, http_post_failure, Reason})
+    end,
+    {noreply, State};
 handle_cast(shutdown, State) ->
     {stop, normal, State};
 handle_cast(Request, State) ->

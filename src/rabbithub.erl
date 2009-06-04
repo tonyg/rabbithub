@@ -6,8 +6,11 @@
 -export([canonical_scheme/0, canonical_host/0]).
 -export([rabbit_node/0, rabbit_call/3, r/2, rs/1]).
 -export([respond_xml/5, binstring_guid/1]).
+-export([deliver_via_post/3, error_and_unsub/2]).
 
 -include_lib("xmerl/include/xmerl.hrl").
+-include("rabbithub.hrl").
+-include("rabbit.hrl").
 
 ensure_started(App) ->
     case application:start(App) of
@@ -157,3 +160,33 @@ stylesheet_pi(none) ->
     [];
 stylesheet_pi(RelUrl) ->
     ["<?xml-stylesheet href=\"", RelUrl, "\" type=\"text/xsl\" ?>"].
+
+deliver_via_post(#rabbithub_subscription{topic = Topic, callback = Callback},
+                 #basic_message{routing_key = RoutingKeyBin,
+                                content = #content{payload_fragments_rev = PayloadRev}},
+                 ExtraHeaders) ->
+    ExtraQuery = lists:flatten(io_lib:format("hub.topic=~s", [Topic])),
+    %% FIXME: get content properties out in some clean way
+    PayloadBin = list_to_binary(lists:reverse(PayloadRev)),
+    case simple_httpc:req("POST",
+                          Callback,
+                          ExtraQuery,
+                          [{"Content-length", integer_to_list(size(PayloadBin))},
+                           {"X-AMQP-Routing-Key", RoutingKeyBin}
+                           | ExtraHeaders],
+                          PayloadBin) of
+        {ok, StatusCode, _StatusText, _Headers, _Body} ->
+            if
+                StatusCode >= 200 andalso StatusCode < 300 ->
+                    {ok, StatusCode};
+                true ->
+                    {error, StatusCode}
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+error_and_unsub(Subscription, ErrorReport) ->
+    error_logger:error_report(ErrorReport),
+    rabbithub_subscription:delete(Subscription),
+    ok.
