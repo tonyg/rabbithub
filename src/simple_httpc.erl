@@ -57,7 +57,7 @@ req(Host, Port, Method, Path, Headers, Body) ->
             %% ok = gen_tcp:shutdown(Sock, write),
             collect_response(Sock, {httpc_response, parse, [nolimit, true]});
         {error, Reason} ->
-            {error, 503, io_lib:format("~p", [Reason])}
+            {error, {503, io_lib:format("~p", [Reason])}}
     end.
 
 format_request(Method, Path, Headers, Body) ->
