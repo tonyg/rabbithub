@@ -7,9 +7,69 @@
     <html>
       <head>
 	<title>Application "<xsl:value-of select="/application/name"/>" (<xsl:value-of select="/application/class"/>)</title>
+	<link type="text/css" rel="stylesheet" href="/static/style.css"></link>
       </head>
       <body>
-	<h1>Application "<xsl:value-of select="/application/name"/>" (<xsl:value-of select="/application/class"/>)</h1>
+	<div id="outerContainer">
+	  <div id="innerContainer">
+	    <h1>"<xsl:value-of select="/application/name"/>"</h1>
+	    <p><b>Class:</b><xsl:text> </xsl:text><xsl:value-of select="/application/class"/></p>
+	    <p><xsl:value-of select="/application/description"/></p>
+	    <xsl:if test="/application/parameters/parameter">
+	      <h2>Parameters</h2>
+	      <ul>
+		<xsl:for-each select="/application/parameters/parameter">
+		  <li><xsl:value-of select="@name"/> = <xsl:value-of select="@value"/></li>
+		</xsl:for-each>
+	      </ul>
+	    </xsl:if>
+	    <xsl:if test="/application/facets/facet">
+	      <h2>Facets</h2>
+	      <xsl:for-each select="/application/facets/facet">
+		<h3><xsl:value-of select="@name"/></h3>
+		<p><xsl:value-of select="description"/></p>
+		<xsl:if test="actions/action">
+		  <h4>Actions</h4>
+		  <xsl:for-each select="actions/action">
+		    <h5><xsl:value-of select="@name"/></h5>
+		    <p><xsl:value-of select="description"/></p>
+		    <table>
+		      <tr><th>HTTP method</th><td><xsl:value-of select="@http.method"/></td></tr>
+		      <tr>
+			<th>Parameters</th>
+			<td>
+			  <table>
+			    <tr>
+			      <th>hub.mode</th>
+			      <td>query</td>
+			      <td>Must be set to "<xsl:value-of select="@hub.mode"/>"</td>
+			    </tr>
+			    <xsl:for-each select="parameter">
+			      <tr>
+				<th><xsl:value-of select="@name"/></th>
+				<td><xsl:value-of select="@location"/></td>
+				<td>
+				  <xsl:if test="@optional">
+				    <i>(optional)</i><xsl:text> </xsl:text>
+				  </xsl:if>
+				  <xsl:if test="@defaultvalue">
+				    <i>(defaults to "<xsl:value-of select="@defaultvalue"/>")</i>
+				    <xsl:text> </xsl:text>
+				  </xsl:if>
+				  <xsl:value-of select="description"/>
+				</td>
+			      </tr>
+			    </xsl:for-each>
+			  </table>
+			</td>
+		      </tr>
+		    </table>
+		  </xsl:for-each>
+		</xsl:if>
+	      </xsl:for-each>
+	    </xsl:if>
+	  </div>
+	</div>
       </body>
     </html>
   </xsl:template>

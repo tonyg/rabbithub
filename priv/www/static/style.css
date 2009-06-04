@@ -23,7 +23,7 @@ h1 {
     padding: 0.5em;
     text-align: right;
     background: #154050;
-    background-image: url(background-banner.jpg);
+    background-image: url(/static/background-banner.jpg);
     background-repeat: repeat-y;
     color: #ccfafa;
     font-weight: normal;
@@ -45,7 +45,7 @@ h3, h4, h5, h6 {
 div#outerContainer {
     margin: 0 0 0 60px;
     background: white;
-    width: 700;
+    width: 700px;
 }
 
 div#innerContainer {
