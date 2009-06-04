@@ -37,16 +37,16 @@ create(Subscription) ->
 delete(Subscription) ->
     {atomic, ok} =
         mnesia:transaction(fun () -> mnesia:delete_object(Subscription) end),
-    {atomic, Pids} =
+    {atomic, SubPids} =
         mnesia:transaction(
           fun () ->
-                  Pids = mnesia:read({rabbithub_subscription_pid, Subscription}),
+                  SubPids = mnesia:read({rabbithub_subscription_pid, Subscription}),
                   ok = mnesia:delete({rabbithub_subscription_pid, Subscription}),
-                  Pids
+                  SubPids
           end),
-    lists:foreach(fun (Pid) ->
+    lists:foreach(fun (#rabbithub_subscription_pid{pid = Pid}) ->
                           gen_server:cast(Pid, shutdown)
-                  end, Pids),
+                  end, SubPids),
     ok.
 
 start_link(Subscription =
