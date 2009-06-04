@@ -42,7 +42,7 @@
 			    <tr>
 			      <th>hub.mode</th>
 			      <td>query</td>
-			      <td>Must be set to "<xsl:value-of select="@hub.mode"/>"</td>
+			      <td>Must be set to "<xsl:value-of select="@hub.mode"/>".</td>
 			    </tr>
 			    <xsl:for-each select="parameter">
 			      <tr>
