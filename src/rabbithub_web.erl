@@ -55,10 +55,7 @@ check_facet('GET', "endpoint", "subscribe", _) -> auth_not_required;
 check_facet('GET', "endpoint", "unsubscribe", _) -> auth_not_required;
 check_facet('POST', "subscribe", "subscribe", _) -> {auth_required, [read]};
 check_facet('POST', "subscribe", "unsubscribe", _) -> {auth_required, []};
-check_facet(Method, Facet, HubMode, ResourceType) ->
-    error_logger:warning_report({check_facet, invalid_operation,
-                                 {Method, Facet, HubMode, ResourceType}}),
-    invalid_operation.
+check_facet(_Method, _Facet, _HubMode, _ResourceType) -> invalid_operation.
 
 handle_static("/" ++ StaticFile, DocRoot, Req) ->
     case Req:get(method) of
@@ -356,12 +353,12 @@ perform_request('GET', endpoint, unsubscribe, _ResourceTypeAtom, Resource, Parse
     check_token(Req, Resource, unsubscribe, ParsedQuery);
 
 perform_request(Method, Facet, HubMode, _ResourceType, Resource, ParsedQuery, Req) ->
-    Xml = {root, [{method, [atom_to_list(Method)]},
-                  {facet, [atom_to_list(Facet)]},
-                  {hubmode, [atom_to_list(HubMode)]},
-                  {resource, [rabbithub:rs(Resource)]},
-                  {querystr, [io_lib:format("~p", [ParsedQuery])]}]},
-    error_logger:warning_report({perform_request, unknown, Xml}),
+    Xml = {debug_request_echo, [{method, [atom_to_list(Method)]},
+                                {facet, [atom_to_list(Facet)]},
+                                {hubmode, [atom_to_list(HubMode)]},
+                                {resource, [rabbithub:rs(Resource)]},
+                                {querystr, [io_lib:format("~p", [ParsedQuery])]}]},
+    error_logger:error_report({perform_request, unknown, Xml}),
     rabbithub:respond_xml(Req, 200, [], none, Xml).
 
 handle_hub_post(Req) ->

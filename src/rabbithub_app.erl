@@ -25,6 +25,7 @@ contact_rabbitmq() ->
                          A
                  end,
     {contacting_rabbitmq, pong} = {contacting_rabbitmq, net_adm:ping(RabbitNode)},
+    error_logger:info_report({contacted_rabbitmq, RabbitNode}),
     ok.
 
 setup_schema() ->
