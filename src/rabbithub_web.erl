@@ -293,6 +293,14 @@ do_validate(Callback, Topic, ActualUse, VerifyToken) ->
             {error, Reason}
     end.
 
+invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, MaybeShortcut) ->
+    case Fun(Callback, Topic, MaybeShortcut) of
+        ok ->
+            Req:respond({204, [], []});
+        {error, {status, StatusCode}} ->
+            Req:respond({StatusCode, [], []})
+    end.
+
 validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) ->
     Callback = param(ParsedQuery, "hub.callback", missing),
     Topic = param(ParsedQuery, "hub.topic", missing),
@@ -310,9 +318,11 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                         ActualUse ->
                             case can_shortcut(SourceResource, TargetResource) of
                                 true ->
-                                    Fun(Callback, Topic, TargetResource);
+                                    invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
+                                                               TargetResource);
                                 false ->
-                                    Fun(Callback, Topic, no_shortcut)
+                                    invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
+                                                               no_shortcut)
                             end;
                         _ ->
                             Req:respond({403, [], "Shortcut token has wrong hub.mode"})
@@ -342,12 +352,8 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                                     case do_validate(Callback, Topic,
                                                      ActualUse, VerifyToken) of
                                         ok ->
-                                            case Fun(Callback, Topic, no_shortcut) of
-                                                ok ->
-                                                    Req:respond({204, [], []});
-                                                {error, {status, StatusCode}} ->
-                                                    Req:respond({StatusCode, [], []})
-                                            end;
+                                            invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
+                                                                       no_shortcut);
                                         {error, Reason} ->
                                             Req:respond
                                               ({403, [],
