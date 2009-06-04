@@ -7,7 +7,7 @@
 -include("rabbithub.hrl").
 -include("rabbit.hrl").
 
--define(APPLICATION_XSLT, "/static/application.xsl.xml").
+-define(APPLICATION_XSLT, (rabbithub:canonical_basepath() ++ "static/application.xsl.xml")).
 
 %% External API
 
