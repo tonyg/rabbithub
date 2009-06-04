@@ -192,6 +192,33 @@ declare_queue(Resource = {resource, _VHost, queue, QueueNameBin}, _ParsedQuery, 
                        end
                end).
 
+generate_and_send_token(Req, Resource, IntendedUse, ExtraData) ->
+    SignedTerm = rabbithub:sign_term({Resource, IntendedUse, ExtraData}),
+    Req:respond({200,
+                 [{"Content-type", "application/x-www-form-urlencoded"}],
+                 ["hub.verify_token=", rabbithub:b64enc(SignedTerm)]}),
+    ok.
+
+extract_and_verify_token(ParsedQuery) ->
+    EncodedParam = param(ParsedQuery, "hub.verify_token", ""),
+    SignedTerm = rabbithub:b64dec(EncodedParam),
+    rabbithub:verify_term(SignedTerm).
+
+check_token(Req, ActualResource, ActualUse, ParsedQuery) ->
+    case catch extract_and_verify_token(ParsedQuery) of
+        {'EXIT', _Reason} ->
+            Req:respond({400, [], "Bad hub.verify_token"});
+        {error, _Reason} ->
+            Req:respond({400, [], "Bad hub.verify_token"});
+        {ok, {IntendedResource, IntendedUse, _ExtraData}} ->
+            if
+                IntendedUse =:= ActualUse andalso IntendedResource =:= ActualResource ->
+                    Req:respond({204, [], []});
+                true ->
+                    Req:respond({400, [], "Intended use or resource does not match actual use or resource."})
+            end
+    end.
+
 extract_message(ExchangeResource, ParsedQuery, Req) ->
     RoutingKey = param(ParsedQuery, "hub.topic", ""),
     ContentTypeBin = case Req:get_header_value("content-type") of
@@ -310,6 +337,23 @@ perform_request('GET', endpoint, '', queue, Resource, _ParsedQuery, Req) ->
                                          [endpoint_facet(Req, "/endpoint/q/" ++ QN)]),
             rabbithub:respond_xml(Req, 200, [], ?APPLICATION_XSLT, Xml)
     end;
+
+perform_request('GET', endpoint, generate_token, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
+    ExtraData = param(ParsedQuery, "rabbithub.data", ""),
+    case param(ParsedQuery, "hub.intended_use", undefined) of
+        "subscribe" ->
+            ok = generate_and_send_token(Req, Resource, subscribe, ExtraData);
+        "unsubscribe" ->
+            ok = generate_and_send_token(Req, Resource, unsubscribe, ExtraData);
+        _ ->
+            Req:respond({400, [], "Missing or bad hub.intended_use parameter"})
+    end;
+
+perform_request('GET', endpoint, subscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
+    check_token(Req, Resource, subscribe, ParsedQuery);
+
+perform_request('GET', endpoint, unsubscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
+    check_token(Req, Resource, unsubscribe, ParsedQuery);
 
 perform_request(Method, Facet, HubMode, _ResourceType, Resource, ParsedQuery, Req) ->
     Xml = {root, [{method, [atom_to_list(Method)]},
