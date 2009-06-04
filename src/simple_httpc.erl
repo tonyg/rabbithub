@@ -2,7 +2,22 @@
 
 -export([req/5, req/6]).
 
-split_host_port(S) ->
+split_netloc(S) ->
+    case string:tokens(S, "@") of
+        [UserPass, HostPort] ->
+            {Host, Port} = split_hostport(HostPort),
+            case string:tokens(UserPass, ":") of
+                [User, Pass] ->
+                    {User, Pass, Host, Port};
+                [User] ->
+                    {User, "", Host, Port}
+            end;
+        [HostPort] ->
+            {Host, Port} = split_hostport(HostPort),
+            {none, none, Host, Port}
+    end.
+
+split_hostport(S) ->
     case string:tokens(S, ":") of
         [Host, Port] ->
             {Host, list_to_integer(Port)};
@@ -12,15 +27,21 @@ split_host_port(S) ->
 
 req(Method, FullUrl, ExtraQuery, Headers, Body) ->
     case catch mochiweb_util:urlsplit(FullUrl) of
-        {"http", HostAndMaybePort, Path, ExistingQuery, Fragment} ->
+        {"http", NetLoc, Path, ExistingQuery, Fragment} ->
+            {User, Pass, Host, Port} = split_netloc(NetLoc),
             NewQuery = case {ExistingQuery, ExtraQuery} of
                            {_, ""} -> ExistingQuery;
                            {"", _} -> ExtraQuery;
                            _ -> ExistingQuery ++ "&" ++ ExtraQuery
                        end,
             NewPath = mochiweb_util:urlunsplit_path({Path, NewQuery, Fragment}),
-            {Host, Port} = split_host_port(HostAndMaybePort),
-            req(Host, Port, Method, NewPath, Headers, Body);
+            NewHeaders = case User of
+                             none -> Headers;
+                             _ -> [{"Authorization",
+                                    "Basic " ++ base64:encode_to_string(User ++ ":" ++ Pass)}
+                                   | Headers]
+                         end,
+            req(Host, Port, Method, NewPath, NewHeaders, Body);
         _ ->
             {error, invalid_callback_url}
     end.
