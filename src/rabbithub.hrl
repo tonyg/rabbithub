@@ -1,4 +1,3 @@
--record(rabbithub_subscription, {queue, callback}).
+-record(rabbithub_subscription, {resource, topic, callback}).
 
-%% RabbitMQ resource
--record(resource, {virtual_host, kind, name}).
+-record(rabbithub_subscription_pid, {subscription, pid}).

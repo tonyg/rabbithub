@@ -38,13 +38,17 @@ upgrade() ->
 %% @doc supervisor callback.
 init([]) ->
     Ip = case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end,   
-    WebConfig = [
-         {ip, Ip},
+    WebConfig = [{ip, Ip},
                  {port, 8000},
                  {docroot, rabbithub_deps:local_path(["priv", "www"])}],
+
+    SubSup = {rabbithub_subscription_sup,
+              {rabbithub_subscription_sup, start_link, []},
+              permanent, 5000, supervisor, [rabbithub_subscription_sup]},
+
     Web = {rabbithub_web,
            {rabbithub_web, start, [WebConfig]},
            permanent, 5000, worker, dynamic},
 
-    Processes = [Web],
+    Processes = [SubSup, Web],
     {ok, {{one_for_one, 10, 10}, Processes}}.

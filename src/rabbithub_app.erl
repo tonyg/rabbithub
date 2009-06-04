@@ -36,7 +36,13 @@ setup_schema() ->
     ok = mnesia:start(),
     ok = create_table(rabbithub_subscription,
                       [{attributes, record_info(fields, rabbithub_subscription)},
+                       {type, bag},
                        {disc_copies, [node()]}]),
+    ok = create_table(rabbithub_subscription_pid,
+                      [{attributes, record_info(fields, rabbithub_subscription_pid)}]),
+    ok = mnesia:wait_for_tables([rabbithub_subscription,
+                                 rabbithub_subscription_pid],
+                                5000),
     ok.
 
 create_table(Name, Params) ->

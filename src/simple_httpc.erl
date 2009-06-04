@@ -1,6 +1,29 @@
 -module(simple_httpc).
 
--export([req/6]).
+-export([req/5, req/6]).
+
+split_host_port(S) ->
+    case string:tokens(S, ":") of
+        [Host, Port] ->
+            {Host, list_to_integer(Port)};
+        _ ->
+            {S, 80}
+    end.
+
+req(Method, FullUrl, ExtraQuery, Headers, Body) ->
+    case catch mochiweb_util:urlsplit(FullUrl) of
+        {"http", HostAndMaybePort, Path, ExistingQuery, Fragment} ->
+            NewQuery = case {ExistingQuery, ExtraQuery} of
+                           {_, ""} -> ExistingQuery;
+                           {"", _} -> ExtraQuery;
+                           _ -> ExistingQuery ++ "&" ++ ExtraQuery
+                       end,
+            NewPath = mochiweb_util:urlunsplit_path({Path, NewQuery, Fragment}),
+            {Host, Port} = split_host_port(HostAndMaybePort),
+            req(Host, Port, Method, NewPath, Headers, Body);
+        _ ->
+            {error, invalid_callback_url}
+    end.
 
 req(Host, Port, Method, Path, Headers, Body) ->
     case gen_tcp:connect(Host, Port, [binary,

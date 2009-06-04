@@ -4,6 +4,9 @@
 
 -export([start/1, stop/0, loop/2]).
 
+-include("rabbithub.hrl").
+-include("rabbit.hrl").
+
 -define(APPLICATION_XSLT, "/static/application.xsl.xml").
 
 %% External API
@@ -13,6 +16,7 @@ start(Options) ->
     Loop = fun (Req) ->
                    ?MODULE:loop(Req, DocRoot)
            end,
+    ok = rabbithub_subscription:start_subscriptions(),
     mochiweb_http:start([{name, ?MODULE}, {loop, Loop} | Options1]).
 
 stop() ->
@@ -31,7 +35,7 @@ loop(Req, DocRoot) ->
                 {ok, ResourceTypeAtom} ->
                     handle_request(ResourceTypeAtom,
                                    binary_to_list(Facet),
-                                   binary_to_list(Name),
+                                   rabbithub:r(ResourceTypeAtom, binary_to_list(Name)),
                                    ParsedQuery,
                                    Req);
                 {error, invalid_resource_type} ->
@@ -54,6 +58,7 @@ check_facet('GET', "endpoint", "generate_token", _) -> {auth_required, [write]};
 check_facet('GET', "endpoint", "subscribe", _) -> auth_not_required;
 check_facet('GET', "endpoint", "unsubscribe", _) -> auth_not_required;
 check_facet('GET', "subscribe", "", _) -> auth_not_required;
+check_facet('POST', "subscribe", "", _) -> auth_not_required; %% special case: see implementation
 check_facet('POST', "subscribe", "subscribe", _) -> {auth_required, [read]};
 check_facet('POST', "subscribe", "unsubscribe", _) -> {auth_required, []};
 check_facet(_Method, _Facet, _HubMode, _ResourceType) -> invalid_operation.
@@ -91,18 +96,17 @@ check_auth(Req, Resource, PermissionsRequired, Fun) ->
                        end)
             end).
 
-handle_request(ResourceType, Facet, Name, ParsedQuery, Req) ->
+handle_request(ResourceTypeAtom, Facet, Resource, ParsedQuery, Req) ->
     HubMode = param(ParsedQuery, "hub.mode", ""),
     Method = Req:get(method),
-    Resource = rabbithub:r(ResourceType, Name),
-    case check_facet(Method, Facet, HubMode, ResourceType) of
+    case check_facet(Method, Facet, HubMode, ResourceTypeAtom) of
         {auth_required, PermissionsRequired} ->
             check_auth(Req, Resource, PermissionsRequired,
                        fun (_Username) ->
                                perform_request(Method,
                                                list_to_atom(Facet),
                                                list_to_atom(HubMode),
-                                               ResourceType,
+                                               ResourceTypeAtom,
                                                Resource,
                                                ParsedQuery,
                                                Req)
@@ -111,7 +115,7 @@ handle_request(ResourceType, Facet, Name, ParsedQuery, Req) ->
             perform_request(Method,
                             list_to_atom(Facet),
                             list_to_atom(HubMode),
-                            ResourceType,
+                            ResourceTypeAtom,
                             Resource,
                             ParsedQuery,
                             Req);
@@ -216,8 +220,7 @@ subscribe_facet() ->
                      desc_param("hub.verify_token", "query", [{optional, "true"}],
                                 "Subscriber-provided opaque token. See the PubSubHubBub spec.")])]).
 
-%% FIXME use the #resource record or do something else:
-declare_queue(Resource = {resource, _VHost, queue, QueueNameBin}, _ParsedQuery, Req) ->
+declare_queue(Resource = #resource{kind = queue, name = QueueNameBin}, _ParsedQuery, Req) ->
     check_auth(Req, Resource, [configure],
                fun (_Username) ->
                        case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
@@ -241,15 +244,21 @@ generate_and_send_token(Req, Resource, IntendedUse, ExtraData) ->
                  ["hub.verify_token=", rabbithub:b64enc(SignedTerm)]}),
     ok.
 
-extract_and_verify_token(ParsedQuery) ->
-    EncodedParam = param(ParsedQuery, "hub.verify_token", ""),
+decode_and_verify_token(EncodedParam) ->
+    case catch decode_and_verify_token1(EncodedParam) of
+        {'EXIT', _Reason} ->
+            {error, crash};
+        Other ->
+            Other
+    end.
+
+decode_and_verify_token1(EncodedParam) ->
     SignedTerm = rabbithub:b64dec(EncodedParam),
     rabbithub:verify_term(SignedTerm).
 
 check_token(Req, ActualResource, ActualUse, ParsedQuery) ->
-    case catch extract_and_verify_token(ParsedQuery) of
-        {'EXIT', _Reason} ->
-            Req:respond({400, [], "Bad hub.verify_token"});
+    EncodedParam = param(ParsedQuery, "hub.verify_token", ""),
+    case decode_and_verify_token(EncodedParam) of
         {error, _Reason} ->
             Req:respond({400, [], "Bad hub.verify_token"});
         {ok, {IntendedResource, IntendedUse, _ExtraData}} ->
@@ -258,6 +267,97 @@ check_token(Req, ActualResource, ActualUse, ParsedQuery) ->
                     Req:respond({204, [], []});
                 true ->
                     Req:respond({400, [], "Intended use or resource does not match actual use or resource."})
+            end
+    end.
+
+can_shortcut(#resource{kind = exchange}, #resource{kind = queue}) ->
+    true;
+can_shortcut(_, _) ->
+    false.
+
+do_validate(Callback, Topic, ActualUse, VerifyToken) ->
+    QuerySuffix0 =
+        lists:flatten(io_lib:format("hub.mode=~s&hub.topic=~s", [atom_to_list(ActualUse), Topic])),
+    QuerySuffix =
+        case VerifyToken of
+            none -> QuerySuffix0;
+            _ -> QuerySuffix0 ++ "&hub.verify_token=" ++ VerifyToken
+        end,
+    case simple_httpc:req("GET", Callback, QuerySuffix, [], []) of
+        {ok, StatusCode, _StatusText, _Headers, _Body}
+          when StatusCode >= 200 andalso StatusCode < 300 ->
+            ok;
+        {ok, StatusCode, _StatusText, _Headers, _Body} ->
+            {error, {request_status, StatusCode}};
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) ->
+    Callback = param(ParsedQuery, "hub.callback", missing),
+    Topic = param(ParsedQuery, "hub.topic", missing),
+    VerifyModes = string:tokens(param(ParsedQuery, "hub.verify", missing), ","),
+    VerifyToken = param(ParsedQuery, "hub.verify_token", none),
+    case lists:member(missing, [Callback, Topic, VerifyModes]) of
+        true ->
+            Req:respond({400, [], "Missing required parameter"});
+        false ->
+            case decode_and_verify_token(VerifyToken) of
+                {ok, {TargetResource, IntendedUse, _ExtraData}} ->
+                    %% OMG it's one of ours! It could be possible to
+                    %% shortcut.
+                    case IntendedUse of
+                        ActualUse ->
+                            case can_shortcut(SourceResource, TargetResource) of
+                                true ->
+                                    Fun(Callback, Topic, TargetResource);
+                                false ->
+                                    Fun(Callback, Topic, no_shortcut)
+                            end;
+                        _ ->
+                            Req:respond({403, [], "Shortcut token has wrong hub.mode"})
+                    end;
+                {error, _} ->
+                    %% Either it's not ours, or it's corrupted in some
+                    %% way. No short-cuts are possible. Treat it as a
+                    %% regular subscription request and invoke the
+                    %% verification callback.
+
+                    %% FIXME: honour subscriber's preferred order of VerifyModes!
+                    case lists:member("async", VerifyModes) of
+                        true ->
+                            Req:respond({202, [], []}),
+                            spawn(fun () ->
+                                          case do_validate(Callback, Topic,
+                                                           ActualUse, VerifyToken) of
+                                              ok ->
+                                                  Fun(Callback, Topic, no_shortcut);
+                                              {error, _} ->
+                                                  ignore
+                                          end
+                                  end);
+                        false ->
+                            case lists:member("sync", VerifyModes) of
+                                true ->
+                                    case do_validate(Callback, Topic,
+                                                     ActualUse, VerifyToken) of
+                                        ok ->
+                                            case Fun(Callback, Topic, no_shortcut) of
+                                                ok ->
+                                                    Req:respond({204, [], []});
+                                                {error, {status, StatusCode}} ->
+                                                    Req:respond({StatusCode, [], []})
+                                            end;
+                                        {error, Reason} ->
+                                            Req:respond
+                                              ({403, [],
+                                                io_lib:format("Request verification failed: ~p",
+                                                              [Reason])})
+                                    end;
+                                false ->
+                                    Req:respond({400, [], "No supported hub.verify modes listed"})
+                            end
+                    end
             end
     end.
 
@@ -290,8 +390,7 @@ perform_request('POST', endpoint, '', queue, Resource, ParsedQuery, Req) ->
                       _ -> false
                   end,
     case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
-        %% TODO use the record or think of something else other than this ugly solution:
-        {ok, {amqqueue, _Name, _Durable, _AutoDelete, _Arguments, QPid}} ->
+        {ok, #amqqueue{pid = QPid}} ->
             true = rabbithub:rabbit_call(rabbit_amqqueue, deliver,
                                          [IsMandatory, false, none, Msg, QPid]),
             Req:respond({case IsMandatory of true -> 204; false -> 202 end, [], []});
@@ -317,12 +416,11 @@ perform_request('PUT', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
 
 perform_request('PUT', endpoint, '', queue, UncheckedResource, ParsedQuery, Req) ->
     case UncheckedResource of
-        %% FIXME either use the record or do something else:
-        {resource, _VHost, queue, <<>>} ->
+        #resource{kind = queue, name = <<>>} ->
             V = rabbithub:r(queue, rabbithub:binstring_guid("amq.gen.http")),
             declare_queue(V, ParsedQuery, Req);
         %% FIXME should use rabbit_channel:check_name/2, but that's not exported:
-        {resource, _Vhost, queue, <<"amq.", _/binary>>} ->
+        #resource{kind = queue, name = <<"amq.", _/binary>>} ->
             Req:respond({400, [], "Invalid queue name"});
         V ->
             declare_queue(V, ParsedQuery, Req)
@@ -330,8 +428,7 @@ perform_request('PUT', endpoint, '', queue, UncheckedResource, ParsedQuery, Req)
 
 perform_request('DELETE', endpoint, '', exchange, Resource, _ParsedQuery, Req) ->
     case Resource of
-        %% FIXME either use the record or do something else:
-        {resource, _VHost, exchange, <<>>} ->
+        #resource{kind = exchange, name = <<>>} ->
             Req:respond({403, [], "Deleting the default exchange is not permitted"});
         _ ->
             case rabbithub:rabbit_call(rabbit_exchange, delete, [Resource, false]) of
@@ -356,9 +453,8 @@ perform_request('GET', Facet, '', exchange, Resource, _ParsedQuery, Req) ->
     case rabbithub:rabbit_call(rabbit_exchange, lookup, [Resource]) of
         {error, not_found} ->
             Req:not_found();
-        %% FIXME use the records or do something else:
-        {ok, {exchange, {resource, _VHost, exchange, XNameBin}, Type,
-              _Durable, _AutoDelete, _Arguments}} ->
+        {ok, #exchange{name = #resource{kind = exchange, name = XNameBin},
+                       type = Type}} ->
             XN = binary_to_list(XNameBin),
             Xml = application_descriptor(XN,
                                          "AMQP " ++ rabbithub:rs(Resource),
@@ -375,9 +471,7 @@ perform_request('GET', Facet, '', queue, Resource, _ParsedQuery, Req) ->
     case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
         {error, not_found} ->
             Req:not_found();
-        %% FIXME use the records or do something else:
-        {ok, {amqqueue, {resource, _VHost, queue, QNameBin},
-              _Durable, _AutoDelete, _Arguments, _QPid}} ->
+        {ok, #amqqueue{name = #resource{kind = queue, name = QNameBin}}} ->
             QN = binary_to_list(QNameBin),
             Xml = application_descriptor(QN,
                                          "AMQP " ++ rabbithub:rs(Resource),
@@ -406,6 +500,65 @@ perform_request('GET', endpoint, subscribe, _ResourceTypeAtom, Resource, ParsedQ
 
 perform_request('GET', endpoint, unsubscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
     check_token(Req, Resource, unsubscribe, ParsedQuery);
+
+perform_request('POST', subscribe, '', ResourceTypeAtom, Resource, _ParsedQuery, Req) ->
+    %% Pulls new query parameters out of the body, and loops around to
+    %% handle_request again, which performs authentication and
+    %% authorization checks as appropriate to the new query
+    %% parameters.
+
+    IsContentTypeOk = case Req:get_header_value("content-type") of
+                          undefined -> true; %% permit people to omit it
+                          "application/x-www-form-urlencoded" -> true;
+                          _ -> false
+                      end,
+    if
+        IsContentTypeOk ->
+            BodyQuery = mochiweb_util:parse_qs(Req:recv_body()),
+            handle_request(ResourceTypeAtom, "subscribe", Resource, BodyQuery, Req);
+        true ->
+            Req:respond({400, [], "Bad content-type; expected application/x-www-form-urlencoded"})
+    end;
+
+perform_request('POST', subscribe, subscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
+    validate_subscription_request(Req, ParsedQuery, Resource, subscribe,
+                                  fun (Callback, Topic, no_shortcut) ->
+                                          Sub = #rabbithub_subscription{resource = Resource,
+                                                                        topic = Topic,
+                                                                        callback = Callback},
+                                          _IgnoredResult = rabbithub_subscription:create(Sub),
+                                          ok;
+                                      (_Callback, Topic, TargetResource) ->
+                                          case rabbithub:rabbit_call(rabbit_exchange,
+                                                                     add_binding,
+                                                                     [Resource, TargetResource,
+                                                                      list_to_binary(Topic), []]) of
+                                              ok ->
+                                                  ok;
+                                              {error, _} ->
+                                                  {error, {status, 404}}
+                                          end
+                                  end);
+
+perform_request('POST', subscribe, unsubscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
+    validate_subscription_request(Req, ParsedQuery, Resource, unsubscribe,
+                                  fun (Callback, Topic, no_shortcut) ->
+                                          Sub = #rabbithub_subscription{resource = Resource,
+                                                                        topic = Topic,
+                                                                        callback = Callback},
+                                          ok = rabbithub_subscription:delete(Sub),
+                                          ok;
+                                      (_Callback, Topic, TargetResource) ->
+                                          case rabbithub:rabbit_call(rabbit_exchange,
+                                                                     delete_binding,
+                                                                     [Resource, TargetResource,
+                                                                      list_to_binary(Topic), []]) of
+                                              ok ->
+                                                  ok;
+                                              {error, _} ->
+                                                  {error, {status, 404}}
+                                          end
+                                  end);
 
 perform_request(Method, Facet, HubMode, _ResourceType, Resource, ParsedQuery, Req) ->
     Xml = {debug_request_echo, [{method, [atom_to_list(Method)]},
