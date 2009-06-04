@@ -126,6 +126,9 @@ request_host(Req) ->
             V
     end.
 
+self_url(Req) ->
+    canonical_url(Req, Req:get(path)).
+
 canonical_url(Req, Path) ->
     mochiweb_util:urlunsplit({rabbithub:canonical_scheme(),
                               request_host(Req),
@@ -133,8 +136,9 @@ canonical_url(Req, Path) ->
                               "",
                               ""}).
 
-application_descriptor(Name, Class, Parameters, Facets) ->
+application_descriptor(Name, Description, Class, Parameters, Facets) ->
     {application, [{name, [Name]},
+                   {description, [Description]},
                    {class, [Class]},
                    {parameters, [{parameter, [{name, N}, {value, V}], []}
                                  || {N, V} <- Parameters]},
@@ -148,28 +152,40 @@ desc_param(Name, Location, Attrs, Description) ->
     {parameter, [{name, Name}, {location, Location} | Attrs],
      [{description, [Description]}]}.
 
-endpoint_facet(Req, Path) ->
-    {facet, [{href, canonical_url(Req, Path)}],
-     [{description, ["Facet permitting delivery of pubsub messages into the application."]},
-      desc_action("", "POST", "deliver",
-                  "Deliver a message to the endpoint.",
-                  [desc_param("hub.topic", "query", [{defaultvalue, ""}],
-                              "The routing key to use for the delivery."),
-                   desc_param("content-type", "headers", [],
-                              "The content-type of the body to deliver."),
-                   desc_param("body", "body", [],
-                              "The body of the HTTP request is used as the message to deliver.")]),
-      desc_action("", "PUT", "create",
-                  "Create an endpoint.",
-                  [desc_param("amqp.exchange_type", "query", [{defaultvalue, "fanout"},
-                                                              {optional, "true"}],
-                              "(When creating an exchange) Specifies the AMQP exchange type.")]),
-      desc_action("", "DELETE", "destroy",
-                  "Destroy the endpoint.",
-                  []),
-      desc_action("", "GET", "info",
-                  "Retrieve a description of the endpoint.",
-                  [])]}.
+facet_descriptor(Name, Description, Actions) ->
+    {facet, [{name, Name}],
+     [{description, [Description]},
+      {actions, Actions}]}.
+
+endpoint_facet() ->
+    facet_descriptor
+      ("endpoint",
+       "Facet permitting delivery of pubsub messages into the application.",
+       [desc_action("", "PUT", "create",
+                    "Create an endpoint.",
+                    [desc_param("amqp.exchange_type", "query", [{defaultvalue, "fanout"},
+                                                                {optional, "true"}],
+                                "(When creating an exchange) Specifies the AMQP exchange type.")]),
+        desc_action("", "DELETE", "destroy",
+                    "Destroy the endpoint.",
+                    []),
+        desc_action("", "POST", "deliver",
+                    "Deliver a message to the endpoint.",
+                    [desc_param("hub.topic", "query", [{defaultvalue, ""}],
+                                "The routing key to use for the delivery."),
+                     desc_param("content-type", "headers", [],
+                                "The content-type of the body to deliver."),
+                     desc_param("body", "body", [],
+                                "The body of the HTTP request is used as the message to deliver.")]),
+        desc_action("", "GET", "info",
+                    "Retrieve a description of the endpoint.",
+                    []),
+        desc_action("generate_token", "GET", "generate_token",
+                    "Generate a verify_token for use in subscribing this application to (or unsubscribing this application from) some other application's message stream.",
+                    [desc_param("hub.intended_use", "query", [],
+                                "Either 'subscribe' or 'unsubscribe', depending on the intended use of the token."),
+                     desc_param("rabbithub.data", "query", [{defaultvalue, ""}],
+                                "Additional data to be checked during the verification stage.")])]).
 
 %% FIXME use the #resource record or do something else:
 declare_queue(Resource = {resource, _VHost, queue, QueueNameBin}, _ParsedQuery, Req) ->
@@ -266,7 +282,7 @@ perform_request('PUT', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
                 {error, not_found} ->
                     rabbithub:rabbit_call(rabbit_exchange, declare,
                                           [Resource, ExchangeType, true, false, []]),
-                    Req:respond({201, [{"Location", canonical_url(Req, Req:get(path))}], []})
+                    Req:respond({201, [{"Location", self_url(Req)}], []})
             end
     end;
 
@@ -315,9 +331,11 @@ perform_request('GET', endpoint, '', exchange, Resource, _ParsedQuery, Req) ->
         {ok, {exchange, {resource, _VHost, exchange, XNameBin}, Type,
               _Durable, _AutoDelete, _Arguments}} ->
             XN = binary_to_list(XNameBin),
-            Xml = application_descriptor(XN, "amqp.exchange",
+            Xml = application_descriptor(XN,
+                                         "AMQP " ++ rabbithub:rs(Resource),
+                                         "amqp.exchange",
                                          [{"amqp.exchange_type", atom_to_list(Type)}],
-                                         [endpoint_facet(Req, "/endpoint/x/" ++ XN)]),
+                                         [endpoint_facet()]),
             rabbithub:respond_xml(Req, 200, [], ?APPLICATION_XSLT, Xml)
     end;
 
@@ -329,9 +347,11 @@ perform_request('GET', endpoint, '', queue, Resource, _ParsedQuery, Req) ->
         {ok, {amqqueue, {resource, _VHost, queue, QNameBin},
               _Durable, _AutoDelete, _Arguments, _QPid}} ->
             QN = binary_to_list(QNameBin),
-            Xml = application_descriptor(QN, "amqp.queue",
+            Xml = application_descriptor(QN,
+                                         "AMQP " ++ rabbithub:rs(Resource),
+                                         "amqp.queue",
                                          [],
-                                         [endpoint_facet(Req, "/endpoint/q/" ++ QN)]),
+                                         [endpoint_facet()]),
             rabbithub:respond_xml(Req, 200, [], ?APPLICATION_XSLT, Xml)
     end;
 
