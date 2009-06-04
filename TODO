@@ -1,3 +1,8 @@
+Encrypt the generated token. It contains too much free authority (the
+name of the underlying resource).
+
+---------------------------------------------------------------------------
+
 A = auth
 X = public
 
