@@ -8,13 +8,13 @@ split_netloc(S) ->
             {Host, Port} = split_hostport(HostPort),
             case string:tokens(UserPass, ":") of
                 [User, Pass] ->
-                    {User, Pass, Host, Port};
+                    {User, Pass, Host, Port, HostPort};
                 [User] ->
-                    {User, "", Host, Port}
+                    {User, "", Host, Port, HostPort}
             end;
         [HostPort] ->
             {Host, Port} = split_hostport(HostPort),
-            {none, none, Host, Port}
+            {none, none, Host, Port, HostPort}
     end.
 
 split_hostport(S) ->
@@ -28,7 +28,7 @@ split_hostport(S) ->
 req(Method, FullUrl, ExtraQuery, Headers, Body) ->
     case catch mochiweb_util:urlsplit(FullUrl) of
         {"http", NetLoc, Path, ExistingQuery, Fragment} ->
-            {User, Pass, Host, Port} = split_netloc(NetLoc),
+            {User, Pass, Host, Port, HostHeaderValue} = split_netloc(NetLoc),
             NewQuery = case {ExistingQuery, ExtraQuery} of
                            {_, ""} -> ExistingQuery;
                            {"", _} -> ExtraQuery;
@@ -37,7 +37,8 @@ req(Method, FullUrl, ExtraQuery, Headers, Body) ->
             NewPath = mochiweb_util:urlunsplit_path({Path, NewQuery, Fragment}),
             NewHeaders = case User of
                              none -> Headers;
-                             _ -> [{"Authorization",
+                             _ -> [{"Host", HostHeaderValue},
+                                   {"Authorization",
                                     "Basic " ++ base64:encode_to_string(User ++ ":" ++ Pass)}
                                    | Headers]
                          end,
