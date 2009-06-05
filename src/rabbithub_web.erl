@@ -319,6 +319,16 @@ invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, MaybeShortcut) ->
             Req:respond({StatusCode, [], []})
     end.
 
+first_acceptable(_Predicate, []) ->
+    {error, none_acceptable};
+first_acceptable(Predicate, [Candidate | Rest]) ->
+    case Predicate(Candidate) of
+        true ->
+            ok;
+        false ->
+            first_acceptable(Predicate, Rest)
+    end.
+
 validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) ->
     Callback = param(ParsedQuery, "hub.callback", missing),
     Topic = param(ParsedQuery, "hub.topic", missing),
@@ -350,37 +360,39 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                     %% way. No short-cuts are possible. Treat it as a
                     %% regular subscription request and invoke the
                     %% verification callback.
-
-                    %% FIXME: honour subscriber's preferred order of VerifyModes!
-                    case lists:member("async", VerifyModes) of
-                        true ->
-                            Req:respond({202, [], []}),
-                            spawn(fun () ->
-                                          case do_validate(Callback, Topic,
-                                                           ActualUse, VerifyToken) of
-                                              ok ->
-                                                  Fun(Callback, Topic, no_shortcut);
-                                              {error, _} ->
-                                                  ignore
-                                          end
-                                  end);
-                        false ->
-                            case lists:member("sync", VerifyModes) of
-                                true ->
-                                    case do_validate(Callback, Topic,
-                                                     ActualUse, VerifyToken) of
-                                        ok ->
-                                            invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
-                                                                       no_shortcut);
-                                        {error, Reason} ->
-                                            Req:respond
-                                              ({400, [],
-                                                io_lib:format("Request verification failed: ~p",
-                                                              [Reason])})
-                                    end;
-                                false ->
-                                    Req:respond({400, [], "No supported hub.verify modes listed"})
-                            end
+                    case first_acceptable(
+                           fun ("async") ->
+                                   Req:respond({202, [], []}),
+                                   spawn(fun () ->
+                                                 case do_validate(Callback, Topic,
+                                                                  ActualUse, VerifyToken) of
+                                                     ok ->
+                                                         Fun(Callback, Topic, no_shortcut);
+                                                     {error, _} ->
+                                                         ignore
+                                                 end
+                                         end),
+                                   true;
+                               ("sync") ->
+                                   case do_validate(Callback, Topic,
+                                                    ActualUse, VerifyToken) of
+                                       ok ->
+                                           invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
+                                                                      no_shortcut);
+                                       {error, Reason} ->
+                                           Req:respond
+                                             ({400, [],
+                                               io_lib:format("Request verification failed: ~p",
+                                                             [Reason])})
+                                   end,
+                                   true;
+                               (_) ->
+                                   false
+                           end, VerifyModes) of
+                        ok ->
+                            ok;
+                        {error, none_acceptable} ->
+                            Req:respond({400, [], "No supported hub.verify modes listed"})
                     end
             end
     end.
