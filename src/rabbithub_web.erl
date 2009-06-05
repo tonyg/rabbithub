@@ -327,7 +327,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                                                                no_shortcut)
                             end;
                         _ ->
-                            Req:respond({403, [], "Shortcut token has wrong hub.mode"})
+                            Req:respond({400, [], "Shortcut token has wrong hub.mode"})
                     end;
                 {error, _} ->
                     %% Either it's not ours, or it's corrupted in some
@@ -358,7 +358,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                                                                        no_shortcut);
                                         {error, Reason} ->
                                             Req:respond
-                                              ({403, [],
+                                              ({400, [],
                                                 io_lib:format("Request verification failed: ~p",
                                                               [Reason])})
                                     end;
