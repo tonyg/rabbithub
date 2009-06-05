@@ -5,7 +5,12 @@
 check_authentication(Req, Fun) ->
     case Req:get_header_value("authorization") of
         undefined ->
-            request_auth(Req);
+            case rabbithub:default_username() of
+                undefined ->
+                    request_auth(Req);
+                Username ->
+                    Fun(Username)
+            end;
         "Basic " ++ AuthInfo ->
             case check_auth_info(AuthInfo) of
                 {ok, Username} ->

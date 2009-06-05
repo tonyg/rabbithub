@@ -4,6 +4,7 @@
 -export([instance_key/0, sign_term/1, verify_term/1]).
 -export([b64enc/1, b64dec/1]).
 -export([canonical_scheme/0, canonical_host/0, canonical_basepath/0]).
+-export([default_username/0]).
 -export([rabbit_node/0, rabbit_call/3, r/2, rs/1]).
 -export([respond_xml/5, binstring_guid/1]).
 -export([deliver_via_post/3, error_and_unsub/2]).
@@ -124,6 +125,8 @@ from_urlsafe(Acc, N, [C | Rest]) ->
 canonical_scheme() -> get_env(canonical_scheme, "http").
 canonical_host() -> get_env(canonical_host, "localhost").
 canonical_basepath() -> get_env(canonical_basepath, "/").
+
+default_username() -> get_env(default_username, undefined).
 
 rabbit_node() ->
     {ok, N} = application:get_env(rabbitmq_node),
