@@ -1,3 +1,22 @@
+HTTP headers that pertain to the entity:
+
+ - Message headers
+   - Date? It talks about the creation of the message, not the entity
+   - Via
+
+ - Entity headers
+   - Content-Encoding
+   - Content-Language
+   - Content-Location
+   - Content-MD5
+   - Content-Range
+   - Content-Type
+   - Expires
+   - Last-Modified
+
+... and extension headers.
+
+---------------------------------------------------------------------------
 
 ISubscribable:
 
