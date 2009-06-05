@@ -239,11 +239,27 @@ declare_queue(Resource = #resource{kind = queue, name = QueueNameBin}, _ParsedQu
                        end
                end).
 
+resource_exists(R) ->
+    case rabbithub:rabbit_call(case R#resource.kind of
+                                   exchange -> rabbit_exchange;
+                                   queue -> rabbit_amqqueue
+                               end, lookup, [R]) of
+        {ok, _} ->
+            true;
+        {error, not_found} ->
+            false
+    end.
+
 generate_and_send_token(Req, Resource, IntendedUse, ExtraData) ->
-    SignedTerm = rabbithub:sign_term({Resource, IntendedUse, ExtraData}),
-    Req:respond({200,
-                 [{"Content-type", "application/x-www-form-urlencoded"}],
-                 ["hub.verify_token=", rabbithub:b64enc(SignedTerm)]}),
+    case resource_exists(Resource) of
+        true ->
+            SignedTerm = rabbithub:sign_term({Resource, IntendedUse, ExtraData}),
+            Req:respond({200,
+                         [{"Content-type", "application/x-www-form-urlencoded"}],
+                         ["hub.verify_token=", rabbithub:b64enc(SignedTerm)]});
+        false ->
+            Req:not_found()
+    end,
     ok.
 
 decode_and_verify_token(EncodedParam) ->
@@ -534,8 +550,11 @@ perform_request('POST', subscribe, subscribe, _ResourceTypeAtom, Resource, Parse
                                           Sub = #rabbithub_subscription{resource = Resource,
                                                                         topic = Topic,
                                                                         callback = Callback},
-                                          _IgnoredResult = rabbithub_subscription:create(Sub),
-                                          ok;
+                                          case rabbithub_subscription:create(Sub) of
+                                              ok -> ok;
+                                              {error, not_found} -> {error, {status, 404}};
+                                              {error, _} -> {error, {status, 500}}
+                                          end;
                                       (_Callback, Topic, TargetResource) ->
                                           case rabbithub:rabbit_call(rabbit_exchange,
                                                                      add_binding,

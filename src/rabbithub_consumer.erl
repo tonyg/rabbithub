@@ -32,7 +32,9 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource}) ->
                         q_monitor_ref = MonRef,
                         consumer_tag = ConsumerTag}};
         {error, not_found} ->
-            {stop, queue_not_found}
+            ok = rabbithub:error_and_unsub(Subscription,
+                                           {rabbithub_consumer, queue_not_found, Subscription}),
+            {stop, not_found}
     end.
 
 handle_call(Request, _From, State) ->

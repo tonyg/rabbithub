@@ -35,7 +35,7 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource,
                         rabbit_monitor_ref = MonRef,
                         queue_name = QueueName}};
         {error, exchange_not_found} ->
-            {stop, exchange_not_found}
+            {stop, not_found}
     end.
 
 handle_call(Request, _From, State) ->

@@ -2,7 +2,7 @@
 
 -export([start_subscriptions/0]).
 -export([create/1, delete/1]).
--export([start_link/1, start/1]).
+-export([start_link/1]).
 -export([register_subscription_pid/2, erase_subscription_pid/1]).
 
 -include("rabbithub.hrl").
@@ -15,10 +15,7 @@ start_subscriptions() ->
                                                 [],
                                                 rabbithub_subscription)
                            end),
-    lists:foreach(fun start_subscription/1, Subscriptions).
-
-start_subscription(Subscription) ->
-    {ok, _Pid} = rabbithub_subscription:start(Subscription).
+    lists:foreach(fun start/1, Subscriptions).
 
 create(Subscription) ->
     {atomic, ok} =
@@ -59,7 +56,15 @@ start_link(Subscription =
     end.
 
 start(Subscription) ->
-    supervisor:start_child(rabbithub_subscription_sup, [Subscription]).
+    case supervisor:start_child(rabbithub_subscription_sup, [Subscription]) of
+        {ok, _Pid} ->
+            ok;
+        {error, normal} ->
+            %% duplicate processes return normal, so as to not provoke the error logger.
+            ok;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 register_subscription_pid(Subscription, Pid) ->
     {atomic, Result} =
