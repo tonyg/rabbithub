@@ -40,7 +40,9 @@ loop(Req, DocRoot) ->
                                    Req);
                 {error, invalid_resource_type} ->
                     Req:not_found()
-            end
+            end;
+        _ ->
+            Req:not_found()
     end.
 
 %% Internal API
