@@ -37,9 +37,10 @@ upgrade() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
-    Ip = case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end,   
+    Ip = case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end,
+    Port = case os:getenv("MOCHIWEB_PORT") of false -> 8000; P -> list_to_integer(P) end,
     WebConfig = [{ip, Ip},
-                 {port, 8000},
+                 {port, Port},
                  {docroot, rabbithub_deps:local_path(["priv", "www"])}],
 
     SubSup = {rabbithub_subscription_sup,
