@@ -424,7 +424,8 @@ extract_message(ExchangeResource, ParsedQuery, Req) ->
 
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
     Msg = extract_message(Resource, ParsedQuery, Req),
-    case rabbithub:rabbit_call(rabbit_basic, publish, [false, false, none, Msg]) of
+    Delivery = rabbithub:rabbit_call(rabbit_basic, delivery, [false, false, none, Msg]),
+    case rabbithub:rabbit_call(rabbit_basic, publish, [Delivery]) of
         {ok, _, _} ->
             Req:respond({202, [], []});
         {error, not_found} ->

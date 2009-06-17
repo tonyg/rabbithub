@@ -41,7 +41,7 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource,
 handle_call(Request, _From, State) ->
     {stop, {unhandled_call, Request}, State}.
 
-handle_cast({deliver, _Txn = none, BasicMessage},
+handle_cast({deliver, _Txn = none, BasicMessage, _ChPid},
             State = #state{subscription = Subscription}) ->
     case rabbithub:deliver_via_post(Subscription, BasicMessage, []) of
         {ok, _} ->
