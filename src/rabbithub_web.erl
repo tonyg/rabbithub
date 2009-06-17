@@ -152,7 +152,11 @@ application_descriptor(Name, Description, Class, Parameters, Facets) ->
                    {facets, Facets}]}.
 
 desc_action(HubMode, HttpMethod, Name, Description, Params) ->
-    {action, [{'hub.mode', HubMode}, {'http.method', HttpMethod}, {name, Name}],
+    HubModeAttr = case HubMode of
+                      undefined -> [];
+                      _ -> [{'hub.mode', HubMode}]
+                  end,
+    {action, HubModeAttr ++ [{'http.method', HttpMethod}, {name, Name}],
      [{description, [Description]} | Params]}.
 
 desc_param(Name, Location, Attrs, Description) ->
@@ -176,7 +180,7 @@ endpoint_facet() ->
         desc_action("", "DELETE", "destroy",
                     "Destroy the endpoint.",
                     []),
-        desc_action("", "POST", "deliver",
+        desc_action(undefined, "POST", "deliver",
                     "Deliver a message to the endpoint.",
                     [desc_param("hub.topic", "query", [{defaultvalue, ""}],
                                 "The routing key to use for the delivery."),

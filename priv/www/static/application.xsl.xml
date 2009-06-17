@@ -39,11 +39,13 @@
 			<th>Parameters</th>
 			<td>
 			  <table>
-			    <tr>
-			      <th>hub.mode</th>
-			      <td>query</td>
-			      <td>Must be set to "<xsl:value-of select="@hub.mode"/>".</td>
-			    </tr>
+			    <xsl:if test="@hub.mode">
+			      <tr>
+				<th>hub.mode</th>
+				<td>query</td>
+				<td>Must be set to "<xsl:value-of select="@hub.mode"/>".</td>
+			      </tr>
+			    </xsl:if>
 			    <xsl:for-each select="parameter">
 			      <tr>
 				<th><xsl:value-of select="@name"/></th>
