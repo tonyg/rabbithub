@@ -10,5 +10,5 @@
   ]},
   {registered, []},
   {mod, {rabbithub_app, []}},
-  {env, []},
+  {env, [{default_username, "guest"}]},
   {applications, [kernel, stdlib, crypto]}]}.
