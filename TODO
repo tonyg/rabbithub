@@ -1,6 +1,10 @@
 Encrypt the generated token. It contains too much free authority (the
 name of the underlying resource).
 
+Figure out what to do about routing keys -- is the topic supplied in a
+POST the topic of the message as sent, or a repetition of the pattern
+which the subscriber subscribed with?
+
 ---------------------------------------------------------------------------
 
 A = auth
