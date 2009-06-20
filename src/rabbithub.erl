@@ -166,11 +166,11 @@ stylesheet_pi(none) ->
 stylesheet_pi(RelUrl) ->
     ["<?xml-stylesheet href=\"", RelUrl, "\" type=\"text/xsl\" ?>"].
 
-deliver_via_post(#rabbithub_subscription{topic = Topic, callback = Callback},
+deliver_via_post(#rabbithub_subscription{callback = Callback},
                  #basic_message{routing_key = RoutingKeyBin,
                                 content = Content0 = #content{payload_fragments_rev = PayloadRev}},
                  ExtraHeaders) ->
-    ExtraQuery = lists:flatten(io_lib:format("hub.topic=~s", [Topic])),
+    ExtraQuery = lists:flatten(io_lib:format("hub.topic=~s", [RoutingKeyBin])),
     %% FIXME: Put more content properties into the post.
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
         rabbit_call(rabbit_binary_parser, ensure_content_decoded, [Content0]),
