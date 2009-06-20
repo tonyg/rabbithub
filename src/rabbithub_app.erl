@@ -24,7 +24,8 @@ contact_rabbitmq() ->
                      {ok, A} ->
                          A
                  end,
-    {contacting_rabbitmq, pong} = {contacting_rabbitmq, net_adm:ping(RabbitNode)},
+    {contacting_rabbitmq, RabbitNode, pong} =
+        {contacting_rabbitmq, RabbitNode, net_adm:ping(RabbitNode)},
     error_logger:info_report({contacted_rabbitmq, RabbitNode}),
     ok.
 
