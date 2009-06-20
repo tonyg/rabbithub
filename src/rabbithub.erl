@@ -12,6 +12,7 @@
 -include_lib("xmerl/include/xmerl.hrl").
 -include("rabbithub.hrl").
 -include("rabbit.hrl").
+-include("rabbit_framing.hrl").
 
 ensure_started(App) ->
     case application:start(App) of
@@ -167,15 +168,21 @@ stylesheet_pi(RelUrl) ->
 
 deliver_via_post(#rabbithub_subscription{topic = Topic, callback = Callback},
                  #basic_message{routing_key = RoutingKeyBin,
-                                content = #content{payload_fragments_rev = PayloadRev}},
+                                content = Content0 = #content{payload_fragments_rev = PayloadRev}},
                  ExtraHeaders) ->
     ExtraQuery = lists:flatten(io_lib:format("hub.topic=~s", [Topic])),
-    %% FIXME: get content properties out in some clean way
+    %% FIXME: Put more content properties into the post.
+    #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
+        rabbit_call(rabbit_binary_parser, ensure_content_decoded, [Content0]),
     PayloadBin = list_to_binary(lists:reverse(PayloadRev)),
     case simple_httpc:req("POST",
                           Callback,
                           ExtraQuery,
                           [{"Content-length", integer_to_list(size(PayloadBin))},
+                           {"Content-type", case ContentTypeBin of
+                                                undefined -> "application/octet-stream";
+                                                _ -> binary_to_list(ContentTypeBin)
+                                            end},
                            {"X-AMQP-Routing-Key", RoutingKeyBin}
                            | ExtraHeaders],
                           PayloadBin) of
