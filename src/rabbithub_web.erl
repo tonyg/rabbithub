@@ -344,12 +344,13 @@ first_acceptable(Predicate, [Candidate | Rest]) ->
 validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) ->
     Callback = param(ParsedQuery, "hub.callback", missing),
     Topic = param(ParsedQuery, "hub.topic", missing),
-    VerifyModes = string:tokens(param(ParsedQuery, "hub.verify", missing), ","),
+    VerifyModesStr = param(ParsedQuery, "hub.verify", missing),
     VerifyToken = param(ParsedQuery, "hub.verify_token", none),
-    case lists:member(missing, [Callback, Topic, VerifyModes]) of
+    case lists:member(missing, [Callback, Topic, VerifyModesStr]) of
         true ->
             Req:respond({400, [], "Missing required parameter"});
         false ->
+            VerifyModes = string:tokens(VerifyModesStr, ","),
             case decode_and_verify_token(VerifyToken) of
                 {ok, {TargetResource, IntendedUse, _ExtraData}} ->
                     %% OMG it's one of ours! It could be possible to
