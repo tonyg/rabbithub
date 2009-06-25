@@ -170,7 +170,7 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
                  #basic_message{routing_key = RoutingKeyBin,
                                 content = Content0 = #content{payload_fragments_rev = PayloadRev}},
                  ExtraHeaders) ->
-    ExtraQuery = lists:flatten(io_lib:format("hub.topic=~s", [RoutingKeyBin])),
+    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}]),
     %% FIXME: Put more content properties into the post.
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
         rabbit_call(rabbit_binary_parser, ensure_content_decoded, [Content0]),

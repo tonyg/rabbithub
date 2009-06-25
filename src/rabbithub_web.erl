@@ -306,14 +306,12 @@ can_shortcut(_, _) ->
     false.
 
 do_validate(Callback, Topic, ActualUse, VerifyToken) ->
-    QuerySuffix0 =
-        lists:flatten(io_lib:format("hub.mode=~s&hub.topic=~s", [atom_to_list(ActualUse), Topic])),
-    QuerySuffix =
-        case VerifyToken of
-            none -> QuerySuffix0;
-            _ -> QuerySuffix0 ++ "&hub.verify_token=" ++ VerifyToken
-        end,
-    case simple_httpc:req("GET", Callback, QuerySuffix, [], []) of
+    Params0 = [{'hub.mode', ActualUse}, {'hub.topic', Topic}],
+    Params = case VerifyToken of
+                 none -> Params0;
+                 _ -> [{'hub.verify_token', VerifyToken} | Params0]
+             end,
+    case simple_httpc:req("GET", Callback, mochiweb_util:urlencode(Params), [], []) of
         {ok, StatusCode, _StatusText, _Headers, _Body}
           when StatusCode >= 200 andalso StatusCode < 300 ->
             ok;
