@@ -9,6 +9,9 @@
 
 -define(APPLICATION_XSLT, (rabbithub:canonical_basepath() ++ "static/application.xsl.xml")).
 
+-define(DEFAULT_SUBSCRIPTION_LEASE_SECONDS, (30 * 86400)).
+-define(SUBSCRIPTION_LEASE_LIMIT, 1000 * 365 * 86400). %% Around a thousand years
+
 %% External API
 
 start(Options) ->
@@ -87,6 +90,9 @@ param(ParsedQuery, Key, DefaultValue) ->
         false ->
             DefaultValue
     end.
+
+params(ParsedQuery, Key) ->
+    [V || {K, V} <- ParsedQuery, K =:= Key].
 
 check_auth(Req, Resource, PermissionsRequired, Fun) ->
     rabbithub_auth:check_authentication
@@ -222,7 +228,9 @@ subscribe_facet() ->
                      desc_param("hub.verify", "query", [],
                                 "Either 'sync' or 'async'; the subscription verification mode for this request. See the PubSubHubBub spec."),
                      desc_param("hub.verify_token", "query", [{optional, "true"}],
-                                "Subscriber-provided opaque token. See the PubSubHubBub spec.")]),
+                                "Subscriber-provided opaque token. See the PubSubHubBub spec."),
+                     desc_param("hub.lease_seconds", "query", [{optional, "true"}],
+                                "Subscriber-provided lease duration request, in seconds. See the PubSubHubBub spec.")]),
         desc_action("unsubscribe", "POST", "unsubscribe",
                     "Unsubscribe from the application.",
                     [desc_param("hub.callback", "query", [],
@@ -232,7 +240,9 @@ subscribe_facet() ->
                      desc_param("hub.verify", "query", [],
                                 "Either 'sync' or 'async'; the subscription verification mode for this request. See the PubSubHubBub spec."),
                      desc_param("hub.verify_token", "query", [{optional, "true"}],
-                                "Subscriber-provided opaque token. See the PubSubHubBub spec.")])]).
+                                "Subscriber-provided opaque token. See the PubSubHubBub spec."),
+                     desc_param("hub.lease_seconds", "query", [{optional, "true"}],
+                                "Subscriber-provided lease duration request, in seconds. See the PubSubHubBub spec.")])]).
 
 declare_queue(Resource = #resource{kind = queue, name = QueueNameBin}, _ParsedQuery, Req) ->
     check_auth(Req, Resource, [configure],
@@ -321,8 +331,8 @@ do_validate(Callback, Topic, ActualUse, VerifyToken) ->
             {error, Reason}
     end.
 
-invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, MaybeShortcut) ->
-    case Fun(Callback, Topic, MaybeShortcut) of
+invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, LeaseSeconds, MaybeShortcut) ->
+    case Fun(Callback, Topic, LeaseSeconds, MaybeShortcut) of
         ok ->
             Req:respond({204, [], []});
         {error, {status, StatusCode}} ->
@@ -339,16 +349,34 @@ first_acceptable(Predicate, [Candidate | Rest]) ->
             first_acceptable(Predicate, Rest)
     end.
 
+extract_verify_modes(ParsedQuery, ValueIfMissing) ->
+    case lists:concat([string:tokens(V, ",") || V <- params(ParsedQuery, "hub.verify")]) of
+        [] -> ValueIfMissing;
+        Modes -> Modes
+    end.
+
+extract_lease_seconds(ParsedQuery) ->
+    case catch list_to_integer(param(ParsedQuery, "hub.lease_seconds", "")) of
+        {'EXIT', _Reason} ->
+            ?DEFAULT_SUBSCRIPTION_LEASE_SECONDS;
+        InvalidValue when InvalidValue =< 0 ->
+            ?DEFAULT_SUBSCRIPTION_LEASE_SECONDS;
+        InvalidValue when InvalidValue >= ?SUBSCRIPTION_LEASE_LIMIT ->
+            ?SUBSCRIPTION_LEASE_LIMIT;
+        Value ->
+            Value
+    end.
+
 validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) ->
     Callback = param(ParsedQuery, "hub.callback", missing),
     Topic = param(ParsedQuery, "hub.topic", missing),
-    VerifyModesStr = param(ParsedQuery, "hub.verify", missing),
+    VerifyModes = extract_verify_modes(ParsedQuery, missing),
     VerifyToken = param(ParsedQuery, "hub.verify_token", none),
-    case lists:member(missing, [Callback, Topic, VerifyModesStr]) of
+    LeaseSeconds = extract_lease_seconds(ParsedQuery),
+    case lists:member(missing, [Callback, Topic, VerifyModes]) of
         true ->
             Req:respond({400, [], "Missing required parameter"});
         false ->
-            VerifyModes = string:tokens(VerifyModesStr, ","),
             case decode_and_verify_token(VerifyToken) of
                 {ok, {TargetResource, IntendedUse, _ExtraData}} ->
                     %% OMG it's one of ours! It could be possible to
@@ -357,10 +385,12 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                         ActualUse ->
                             case can_shortcut(SourceResource, TargetResource) of
                                 true ->
-                                    invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
+                                    invoke_sub_fun_and_respond(Req, Fun,
+                                                               Callback, Topic, LeaseSeconds,
                                                                TargetResource);
                                 false ->
-                                    invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
+                                    invoke_sub_fun_and_respond(Req, Fun,
+                                                               Callback, Topic, LeaseSeconds,
                                                                no_shortcut)
                             end;
                         _ ->
@@ -378,7 +408,8 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                                                  case do_validate(Callback, Topic,
                                                                   ActualUse, VerifyToken) of
                                                      ok ->
-                                                         Fun(Callback, Topic, no_shortcut);
+                                                         Fun(Callback, Topic, LeaseSeconds,
+                                                             no_shortcut);
                                                      {error, _} ->
                                                          ignore
                                                  end
@@ -388,7 +419,8 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                                    case do_validate(Callback, Topic,
                                                     ActualUse, VerifyToken) of
                                        ok ->
-                                           invoke_sub_fun_and_respond(Req, Fun, Callback, Topic,
+                                           invoke_sub_fun_and_respond(Req, Fun,
+                                                                      Callback, Topic, LeaseSeconds,
                                                                       no_shortcut);
                                        {error, Reason} ->
                                            Req:respond
@@ -570,16 +602,16 @@ perform_request('POST', subscribe, '', ResourceTypeAtom, Resource, _ParsedQuery,
 
 perform_request('POST', subscribe, subscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
     validate_subscription_request(Req, ParsedQuery, Resource, subscribe,
-                                  fun (Callback, Topic, no_shortcut) ->
+                                  fun (Callback, Topic, LeaseSeconds, no_shortcut) ->
                                           Sub = #rabbithub_subscription{resource = Resource,
                                                                         topic = Topic,
                                                                         callback = Callback},
-                                          case rabbithub_subscription:create(Sub) of
+                                          case rabbithub_subscription:create(Sub, LeaseSeconds) of
                                               ok -> ok;
                                               {error, not_found} -> {error, {status, 404}};
                                               {error, _} -> {error, {status, 500}}
                                           end;
-                                      (_Callback, Topic, TargetResource) ->
+                                      (_Callback, Topic, _LeaseSeconds, TargetResource) ->
                                           case rabbithub:rabbit_call(rabbit_exchange,
                                                                      add_binding,
                                                                      [Resource, TargetResource,
@@ -593,13 +625,13 @@ perform_request('POST', subscribe, subscribe, _ResourceTypeAtom, Resource, Parse
 
 perform_request('POST', subscribe, unsubscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
     validate_subscription_request(Req, ParsedQuery, Resource, unsubscribe,
-                                  fun (Callback, Topic, no_shortcut) ->
+                                  fun (Callback, Topic, _LeaseSeconds, no_shortcut) ->
                                           Sub = #rabbithub_subscription{resource = Resource,
                                                                         topic = Topic,
                                                                         callback = Callback},
                                           ok = rabbithub_subscription:delete(Sub),
                                           ok;
-                                      (_Callback, Topic, TargetResource) ->
+                                      (_Callback, Topic, _LeaseSeconds, TargetResource) ->
                                           case rabbithub:rabbit_call(rabbit_exchange,
                                                                      delete_binding,
                                                                      [Resource, TargetResource,

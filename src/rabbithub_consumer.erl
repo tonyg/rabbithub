@@ -9,13 +9,13 @@
 
 -record(state, {subscription, q_monitor_ref, consumer_tag}).
 
-init([Subscription]) ->
-    error_logger:info_report({starting_consumer, Subscription}),
-
+init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
     process_flag(trap_exit, true),
-    case rabbithub_subscription:register_subscription_pid(Subscription, self()) of
+    case rabbithub_subscription:register_subscription_pid(Lease, self(), ?MODULE) of
         ok ->
             really_init(Subscription);
+        expired ->
+            {stop, normal};
         duplicate ->
             {stop, normal}
     end.

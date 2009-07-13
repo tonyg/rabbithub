@@ -8,13 +8,13 @@
 
 -record(state, {subscription, rabbit_monitor_ref, queue_name}).
 
-init([Subscription]) ->
-    error_logger:info_report({starting_pseudo_queue, Subscription}),
-
+init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
     process_flag(trap_exit, true),
-    case rabbithub_subscription:register_subscription_pid(Subscription, self()) of
+    case rabbithub_subscription:register_subscription_pid(Lease, self(), ?MODULE) of
         ok ->
             really_init(Subscription);
+        expired ->
+            {stop, normal};
         duplicate ->
             {stop, normal}
     end.
