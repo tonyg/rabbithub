@@ -199,11 +199,19 @@ endpoint_facet() ->
                     []),
         desc_action("subscribe", "GET", "verify_subscription",
                     "Ensure that an earlier-generated token is valid and intended for use as a subscription token.",
-                    [desc_param("hub.verify_token", "query", [],
+                    [desc_param("hub.challenge", "query", [],
+                                "Token to echo to the caller."),
+                     desc_param("hub.lease_seconds", "query", [],
+                                "Number of seconds that the subscription will remain active before expiring."),
+                     desc_param("hub.verify_token", "query", [],
                                 "The token to validate.")]),
         desc_action("unsubscribe", "GET", "verify_unsubscription",
                     "Ensure that an earlier-generated token is valid and intended for use as an unsubscription token.",
-                    [desc_param("hub.verify_token", "query", [],
+                    [desc_param("hub.challenge", "query", [],
+                                "Token to echo to the caller."),
+                     desc_param("hub.lease_seconds", "query", [{optional, "true"}],
+                                "Number of seconds that the subscription will remain active before expiring."),
+                     desc_param("hub.verify_token", "query", [],
                                 "The token to validate.")]),
         desc_action("generate_token", "GET", "generate_token",
                     "Generate a verify_token for use in subscribing this application to (or unsubscribing this application from) some other application's message stream.",
@@ -298,13 +306,14 @@ decode_and_verify_token1(EncodedParam) ->
 
 check_token(Req, ActualResource, ActualUse, ParsedQuery) ->
     EncodedParam = param(ParsedQuery, "hub.verify_token", ""),
+    Challenge = param(ParsedQuery, "hub.challenge", ""), %% strictly speaking, mandatory
     case decode_and_verify_token(EncodedParam) of
         {error, _Reason} ->
             Req:respond({400, [], "Bad hub.verify_token"});
         {ok, {IntendedResource, IntendedUse, _ExtraData}} ->
             if
                 IntendedUse =:= ActualUse andalso IntendedResource =:= ActualResource ->
-                    Req:respond({204, [], []});
+                    Req:respond({200, [], Challenge});
                 true ->
                     Req:respond({400, [], "Intended use or resource does not match actual use or resource."})
             end
@@ -315,16 +324,25 @@ can_shortcut(#resource{kind = exchange}, #resource{kind = queue}) ->
 can_shortcut(_, _) ->
     false.
 
-do_validate(Callback, Topic, ActualUse, VerifyToken) ->
-    Params0 = [{'hub.mode', ActualUse}, {'hub.topic', Topic}],
+do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
+    Challenge = list_to_binary(rabbithub:b64enc(rabbithub:binstring_guid("c"))),
+    Params0 = [{'hub.mode', ActualUse},
+               {'hub.topic', Topic},
+               {'hub.challenge', Challenge},
+               {'hub.lease_seconds', LeaseSeconds}],
     Params = case VerifyToken of
                  none -> Params0;
                  _ -> [{'hub.verify_token', VerifyToken} | Params0]
              end,
     case simple_httpc:req("GET", Callback, mochiweb_util:urlencode(Params), [], []) of
-        {ok, StatusCode, _StatusText, _Headers, _Body}
+        {ok, StatusCode, _StatusText, _Headers, Body}
           when StatusCode >= 200 andalso StatusCode < 300 ->
-            ok;
+            if
+                Body =:= Challenge ->
+                    ok;
+                true ->
+                    {error, challenge_mismatch}
+            end;
         {ok, StatusCode, _StatusText, _Headers, _Body} ->
             {error, {request_status, StatusCode}};
         {error, Reason} ->
@@ -405,7 +423,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                            fun ("async") ->
                                    Req:respond({202, [], []}),
                                    spawn(fun () ->
-                                                 case do_validate(Callback, Topic,
+                                                 case do_validate(Callback, Topic, LeaseSeconds,
                                                                   ActualUse, VerifyToken) of
                                                      ok ->
                                                          Fun(Callback, Topic, LeaseSeconds,
@@ -416,7 +434,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                                          end),
                                    true;
                                ("sync") ->
-                                   case do_validate(Callback, Topic,
+                                   case do_validate(Callback, Topic, LeaseSeconds,
                                                     ActualUse, VerifyToken) of
                                        ok ->
                                            invoke_sub_fun_and_respond(Req, Fun,
