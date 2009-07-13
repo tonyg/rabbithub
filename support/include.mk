@@ -35,10 +35,10 @@ MODULES = $(ERL_SOURCES:%.erl=%)
 ../ebin/%.app: %.app
 	cp $< $@
 
-$(EBIN_DIR)/%.$(EMULATOR): %.erl
+$(EBIN_DIR)/%.$(EMULATOR): %.erl $(ERL_HEADERS)
 	$(ERLC) $(ERLC_FLAGS) -o $(EBIN_DIR) $<
 
-./%.$(EMULATOR): %.erl
+./%.$(EMULATOR): %.erl $(ERL_HEADERS)
 	$(ERLC) $(ERLC_FLAGS) -o . $<
 
 $(DOC_DIR)/%.html: %.erl
