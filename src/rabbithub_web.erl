@@ -469,7 +469,10 @@ extract_message(ExchangeResource, ParsedQuery, Req) ->
     %% the network three times!! Twice for the rabbit_basic:message
     %% call, once for the publish or delivery itself.
     rabbithub:rabbit_call(rabbit_basic, message,
-                          [ExchangeResource, list_to_binary(RoutingKey), ContentTypeBin, Body]).
+                          [ExchangeResource,
+                           list_to_binary(RoutingKey),
+                           [{'content_type', ContentTypeBin}],
+                           Body]).
 
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
     Msg = extract_message(Resource, ParsedQuery, Req),
@@ -487,10 +490,10 @@ perform_request('POST', endpoint, '', queue, Resource, ParsedQuery, Req) ->
                       "true" -> true;
                       _ -> false
                   end,
+    Delivery = rabbithub:rabbit_call(rabbit_basic, delivery, [IsMandatory, false, none, Msg]),
     case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
         {ok, #amqqueue{pid = QPid}} ->
-            true = rabbithub:rabbit_call(rabbit_amqqueue, deliver,
-                                         [IsMandatory, false, none, Msg, QPid]),
+            true = rabbithub:rabbit_call(rabbit_amqqueue, deliver, [QPid, Delivery]),
             Req:respond({case IsMandatory of true -> 204; false -> 202 end, [], []});
         {error, not_found} ->
             Req:not_found()
