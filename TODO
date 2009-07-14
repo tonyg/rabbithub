@@ -1,21 +1,5 @@
 Encrypt the generated token. It contains too much free authority (the
 name of the underlying resource).
 
----------------------------------------------------------------------------
-
-A = auth
-X = public
-
-ISubscribable:
-
-  A subscribe(callback, topic, verify[, verify_token])
-    --> 202 | 204 | 4xx | 5xx
-
-  A unsubscribe(callback, topic, verify[, verify_token])
-    --> 202 | 204 | 4xx | 5xx
-
-IEndpoint:
-  A publish(msg) --> 202 | 204 | 4xx | 5xx
-  A gettoken() --> 200 | 4xx | 5xx
-  X subscribe(token) --> 2xx | 404 | 4xx | 5xx
-  X unsubscribe(token) --> 2xx | 404 | 4xx | 5xx
+Consider auto-renewing inbound subscriptions, based on the
+hub.lease_seconds we're given at subscription validation time.

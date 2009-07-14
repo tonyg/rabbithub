@@ -1,39 +1,40 @@
 -module(rabbithub_subscription).
 
 -export([start_subscriptions/0]).
--export([create/1, delete/1]).
+-export([create/2, delete/1]).
 -export([start_link/1]).
--export([register_subscription_pid/2, erase_subscription_pid/1]).
+-export([register_subscription_pid/3, erase_subscription_pid/1]).
+
+%% Internal export
+-export([expire/1]).
 
 -include("rabbithub.hrl").
 -include("rabbit.hrl").
 
-start_subscriptions() ->
-    {atomic, Subscriptions} =
-        mnesia:transaction(fun () ->
-                                   mnesia:foldl(fun (Sub, Acc) -> [Sub | Acc] end,
-                                                [],
-                                                rabbithub_subscription)
-                           end),
-    lists:foreach(fun start/1, Subscriptions).
+%% Should be exported by timer module, but isn't
+system_time() ->
+    {MegaSec, Sec, MicroSec} = now(),
+    1000000 * (MegaSec * 1000000 + Sec) + MicroSec.
 
-create(Subscription) ->
-    {atomic, ok} =
-        mnesia:transaction(
-          fun () ->
-                  case mnesia:match_object(Subscription) of
-                      [_] ->
-                          %% Already exists.
-                          ok;
-                      [] ->
-                          ok = mnesia:write(Subscription)
-                  end
-          end),
-    start(Subscription).
+start_subscriptions() ->
+    {atomic, Leases} =
+        mnesia:transaction(fun () ->
+                                   mnesia:foldl(fun (Lease, Acc) -> [Lease | Acc] end,
+                                                [],
+                                                rabbithub_lease)
+                           end),
+    lists:foreach(fun start/1, Leases).
+
+create(Subscription, LeaseSeconds) ->
+    RequestedExpiryTime = system_time() + LeaseSeconds * 1000000,
+    Lease = #rabbithub_lease{subscription = Subscription,
+                             lease_expiry_time_microsec = RequestedExpiryTime},
+    {atomic, ok} = mnesia:transaction(fun () -> ok = mnesia:write(Lease) end),
+    start(Lease).
 
 delete(Subscription) ->
     {atomic, ok} =
-        mnesia:transaction(fun () -> mnesia:delete_object(Subscription) end),
+        mnesia:transaction(fun () -> mnesia:delete({rabbithub_lease, Subscription}) end),
     {atomic, SubPids} =
         mnesia:transaction(
           fun () ->
@@ -41,22 +42,30 @@ delete(Subscription) ->
                   ok = mnesia:delete({rabbithub_subscription_pid, Subscription}),
                   SubPids
           end),
-    lists:foreach(fun (#rabbithub_subscription_pid{pid = Pid}) ->
+    lists:foreach(fun (#rabbithub_subscription_pid{pid = Pid,
+                                                   expiry_timer = TRef}) ->
+                          {ok, cancel} = timer:cancel(TRef),
                           gen_server:cast(Pid, shutdown)
                   end, SubPids),
     ok.
 
-start_link(Subscription =
-           #rabbithub_subscription{resource = #resource{kind = ResourceTypeAtom}}) ->
+expire(Subscription) ->
+    error_logger:info_report({expiring, Subscription}),
+    delete(Subscription).
+
+start_link(Lease =
+           #rabbithub_lease{subscription =
+                            #rabbithub_subscription{resource =
+                                                    #resource{kind = ResourceTypeAtom}}}) ->
     case ResourceTypeAtom of
         exchange ->
-            gen_server:start_link(rabbithub_pseudo_queue, [Subscription], []);
+            gen_server:start_link(rabbithub_pseudo_queue, [Lease], []);
         queue ->
-            gen_server:start_link(rabbithub_consumer, [Subscription], [])
+            gen_server:start_link(rabbithub_consumer, [Lease], [])
     end.
 
-start(Subscription) ->
-    case supervisor:start_child(rabbithub_subscription_sup, [Subscription]) of
+start(Lease) ->
+    case supervisor:start_child(rabbithub_subscription_sup, [Lease]) of
         {ok, _Pid} ->
             ok;
         {error, normal} ->
@@ -66,23 +75,52 @@ start(Subscription) ->
             {error, Reason}
     end.
 
-register_subscription_pid(Subscription, Pid) ->
-    {atomic, Result} =
-        mnesia:transaction(
-          fun () ->
-                  case mnesia:read(rabbithub_subscription_pid, Subscription) of
-                      [] ->
-                          ok = mnesia:write({rabbithub_subscription_pid, Subscription, Pid});
-                      [#rabbithub_subscription_pid{pid = ExistingPid}] ->
-                          case is_process_alive(ExistingPid) of
-                              true ->
-                                  duplicate;
-                              false ->
-                                  ok = mnesia:write({rabbithub_subscription_pid, Subscription, Pid})
-                          end
-                  end
-          end),
+register_subscription_pid(Lease, Pid, ProcessModule) ->
+    Result = register_subscription_pid1(Lease, Pid),
+    error_logger:info_report({startup, Result, ProcessModule, Lease}),
     Result.
+
+register_subscription_pid1(#rabbithub_lease{subscription = Subscription,
+                                            lease_expiry_time_microsec = ExpiryTimeMicro},
+                           Pid) ->
+    NowMicro = system_time(),
+    case NowMicro > ExpiryTimeMicro of
+        true ->
+            %% Expired.
+            ok = delete(Subscription),
+            expired;
+        false ->
+            %% Not *yet* expired. Always start a timer, since even if
+            %% it's a duplicate we want to cancel the existing timer
+            %% and create a new timer to fire at the new time.
+            {ok, TRef} = timer:apply_after((ExpiryTimeMicro - NowMicro) div 1000,
+                                           ?MODULE, expire, [Subscription]),
+            NewPidRecord = #rabbithub_subscription_pid{subscription = Subscription,
+                                                       pid = Pid,
+                                                       expiry_timer = TRef},
+            {atomic, Result} =
+                mnesia:transaction(
+                  fun () ->
+                          case mnesia:read(rabbithub_subscription_pid, Subscription) of
+                              [] ->
+                                  ok = mnesia:write(NewPidRecord);
+                              [ExistingRecord =
+                                 #rabbithub_subscription_pid{pid = ExistingPid,
+                                                             expiry_timer = OldTRef}] ->
+                                  case is_process_alive(ExistingPid) of
+                                      true ->
+                                          {ok, cancel} = timer:cancel(OldTRef),
+                                          R1 = ExistingRecord#rabbithub_subscription_pid{
+                                                 expiry_timer = TRef},
+                                          ok = mnesia:write(R1),
+                                          duplicate;
+                                      false ->
+                                          ok = mnesia:write(NewPidRecord)
+                                  end
+                          end
+                  end),
+            Result
+    end.
 
 erase_subscription_pid(Subscription) ->
     {atomic, ok} =
