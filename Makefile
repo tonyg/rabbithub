@@ -40,7 +40,7 @@ install: all
 	@[ -n "$(MAN_DIR)" ] || (echo "Please set MAN_DIR."; false)
 
 	mkdir -p $(DESTDIR)/$(TARGET_DIR)
-	cp -r ebin README.md $(DESTDIR)/$(TARGET_DIR)
+	cp -r ebin deps README.md $(DESTDIR)/$(TARGET_DIR)
 
 	chmod 0755 scripts/*
 	mkdir -p $(DESTDIR)/$(SBIN_DIR)
