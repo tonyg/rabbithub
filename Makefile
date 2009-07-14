@@ -30,3 +30,5 @@ clean-docs: clean-html
 
 clean-html:
 	rm -rf doc/html
+
+distclean: clean
