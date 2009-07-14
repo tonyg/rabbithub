@@ -1,0 +1,14 @@
+Source: rabbithub
+Section: net
+Priority: extra
+Maintainer: Tony Garnock-Jones <tonyg@lshift.net>
+Build-Depends: debhelper (>= 7), erlang-dev
+Standards-Version: 3.8.1
+Homepage: http://github.com/tonyg/rabbithub
+Vcs-Browser: http://github.com/tonyg/rabbithub
+Vcs-Git: git://github.com/tonyg/rabbithub.git
+
+Package: rabbithub
+Architecture: all
+Depends: rabbitmq-server
+Description: A PubSubHubBub gateway for RabbitMQ

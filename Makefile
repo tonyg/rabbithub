@@ -32,3 +32,25 @@ clean-html:
 	rm -rf doc/html
 
 distclean: clean
+
+install: all
+	@[ -n "$(DESTDIR)" ] || (echo "Please set DESTDIR."; false)
+	@[ -n "$(TARGET_DIR)" ] || (echo "Please set TARGET_DIR."; false)
+	@[ -n "$(SBIN_DIR)" ] || (echo "Please set SBIN_DIR."; false)
+	@[ -n "$(MAN_DIR)" ] || (echo "Please set MAN_DIR."; false)
+
+	mkdir -p $(DESTDIR)/$(TARGET_DIR)
+	cp -r ebin README.md $(DESTDIR)/$(TARGET_DIR)
+
+	chmod 0755 scripts/*
+	mkdir -p $(DESTDIR)/$(SBIN_DIR)
+	sed -e "s:@TARGET_DIR@:${TARGET_DIR}:g" scripts/rabbithub.in \
+		> $(DESTDIR)/$(SBIN_DIR)/rabbithub
+	chmod 0755 $(DESTDIR)/$(SBIN_DIR)/rabbithub
+
+# 	for section in 1; do \
+# 		mkdir -p $(DESTDIR)/$(MAN_DIR)/man$$section; \
+# 		for manpage in docs/*.$$section.pod; do \
+# 			cp docs/`basename $$manpage .pod`.gz $(DESTDIR)/$(MAN_DIR)/man$$section; \
+# 		done; \
+# 	done
