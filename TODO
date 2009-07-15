@@ -1,3 +1,6 @@
+Use WADL instead of the adhoc description language I cooked up:
+http://en.wikipedia.org/wiki/Web_Application_Description_Language
+
 Encrypt the generated token. It contains too much free authority (the
 name of the underlying resource).
 
