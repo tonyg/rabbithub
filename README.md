@@ -34,7 +34,7 @@ RabbitHub is content-agnostic, it doesn't implement any of the
 Atom-specific parts of the PubSubHubBub protocol, including the "ping"
 operation that tells a PSHB hub to re-fetch content feeds.
 
-## <a name="example">Example: combining HTTP messaging with AMQP and XMPP</a>
+## <a name="example"></a>Example: combining HTTP messaging with AMQP and XMPP
 
 Combining RabbitHub with the AMQP protocol implemented by RabbitMQ
 itself and with the other adapters and gateways that form part of the
