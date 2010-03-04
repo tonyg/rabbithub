@@ -7,20 +7,21 @@
 -include("rabbithub.hrl").
 -include("rabbit.hrl").
 
--record(state, {subscription, q_monitor_ref, consumer_tag}).
+-record(state, {subscription, secret, q_monitor_ref, consumer_tag}).
 
-init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
+init([Lease = #rabbithub_lease{subscription = Subscription,
+                               secret = Secret}]) ->
     process_flag(trap_exit, true),
     case rabbithub_subscription:register_subscription_pid(Lease, self(), ?MODULE) of
         ok ->
-            really_init(Subscription);
+            really_init(Subscription, Secret);
         expired ->
             {stop, normal};
         duplicate ->
             {stop, normal}
     end.
 
-really_init(Subscription = #rabbithub_subscription{resource = Resource}) ->
+really_init(Subscription = #rabbithub_subscription{resource = Resource}, Secret) ->
     case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
         {ok, Q = #amqqueue{pid = QPid}} ->
             ConsumerTag = rabbithub:binstring_guid("amq.http.consumer"),
@@ -29,6 +30,7 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource}) ->
                                   [Q, false, self(), self(), undefined,
                                    ConsumerTag, false, undefined]),
             {ok, #state{subscription = Subscription,
+                        secret = Secret,
                         q_monitor_ref = MonRef,
                         consumer_tag = ConsumerTag}};
         {error, not_found} ->
@@ -42,8 +44,9 @@ handle_call(Request, _From, State) ->
 
 handle_cast({deliver, _ConsumerTag, AckRequired,
              {_QNameResource, QPid, MsgId, Redelivered, BasicMessage}},
-            State = #state{subscription = Subscription}) ->
+            State = #state{subscription = Subscription, secret = Secret}) ->
     case rabbithub:deliver_via_post(Subscription,
+                                    Secret,
                                     BasicMessage,
                                     [{"X-AMQP-Redelivered", atom_to_list(Redelivered)}]) of
         {ok, _} ->

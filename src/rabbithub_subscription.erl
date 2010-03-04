@@ -1,7 +1,7 @@
 -module(rabbithub_subscription).
 
 -export([start_subscriptions/0]).
--export([create/2, delete/1]).
+-export([create/3, delete/1]).
 -export([start_link/1]).
 -export([register_subscription_pid/3, erase_subscription_pid/1]).
 
@@ -25,10 +25,11 @@ start_subscriptions() ->
                            end),
     lists:foreach(fun start/1, Leases).
 
-create(Subscription, LeaseSeconds) ->
+create(Subscription, LeaseSeconds, Secret) ->
     RequestedExpiryTime = system_time() + LeaseSeconds * 1000000,
     Lease = #rabbithub_lease{subscription = Subscription,
-                             lease_expiry_time_microsec = RequestedExpiryTime},
+                             lease_expiry_time_microsec = RequestedExpiryTime,
+                             secret = Secret},
     {atomic, ok} = mnesia:transaction(fun () -> ok = mnesia:write(Lease) end),
     start(Lease).
 

@@ -6,13 +6,13 @@
 
 -include("rabbithub.hrl").
 
--record(state, {subscription, rabbit_monitor_ref, queue_name}).
+-record(state, {subscription, secret, rabbit_monitor_ref, queue_name}).
 
-init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
+init([Lease = #rabbithub_lease{subscription = Subscription, secret = Secret}]) ->
     process_flag(trap_exit, true),
     case rabbithub_subscription:register_subscription_pid(Lease, self(), ?MODULE) of
         ok ->
-            really_init(Subscription);
+            really_init(Subscription, Secret);
         expired ->
             {stop, normal};
         duplicate ->
@@ -20,7 +20,8 @@ init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
     end.
 
 really_init(Subscription = #rabbithub_subscription{resource = Resource,
-                                                   topic = Topic}) ->
+                                                   topic = Topic},
+           Secret) ->
     QueueName = rabbithub:r(queue, rabbithub:binstring_guid("amq.http.pseudoqueue")),
     Q = rabbithub:rabbit_call(rabbit_amqqueue, pseudo_queue,
                               [QueueName, self()]),
@@ -32,6 +33,7 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource,
             RabbitPid = rabbithub:rabbit_call(erlang, whereis, [rabbit_sup]),
             MonRef = erlang:monitor(process, RabbitPid),
             {ok, #state{subscription = Subscription,
+                        secret = Secret,
                         rabbit_monitor_ref = MonRef,
                         queue_name = QueueName}};
         {error, exchange_not_found} ->
@@ -42,8 +44,8 @@ handle_call(Request, _From, State) ->
     {stop, {unhandled_call, Request}, State}.
 
 handle_cast({deliver, _Txn = none, BasicMessage, _ChPid},
-            State = #state{subscription = Subscription}) ->
-    case rabbithub:deliver_via_post(Subscription, BasicMessage, []) of
+            State = #state{secret = Secret, subscription = Subscription}) ->
+    case rabbithub:deliver_via_post(Subscription, Secret, BasicMessage, []) of
         {ok, _} ->
             ok;
         {error, Reason} ->

@@ -1,36 +1,17 @@
 -module(rabbithub).
 
--export([start/0, stop/0]).
 -export([instance_key/0, sign_term/1, verify_term/1]).
 -export([b64enc/1, b64dec/1]).
 -export([canonical_scheme/0, canonical_host/0, canonical_basepath/0]).
 -export([default_username/0]).
 -export([rabbit_node/0, rabbit_call/3, r/2, rs/1]).
 -export([respond_xml/5, binstring_guid/1]).
--export([deliver_via_post/3, error_and_unsub/2]).
+-export([deliver_via_post/4, error_and_unsub/2]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include("rabbithub.hrl").
 -include("rabbit.hrl").
 -include("rabbit_framing.hrl").
-
-ensure_started(App) ->
-    case application:start(App) of
-        ok ->
-            ok;
-        {error, {already_started, App}} ->
-            ok
-    end.
-        
-start() ->
-    rabbithub_deps:ensure(),
-    ensure_started(crypto),
-    application:start(rabbithub).
-
-stop() ->
-    Res = application:stop(rabbithub),
-    application:stop(crypto),
-    Res.
 
 get_env(EnvVar, DefaultValue) ->
     case application:get_env(EnvVar) of
@@ -166,7 +147,14 @@ stylesheet_pi(none) ->
 stylesheet_pi(RelUrl) ->
     ["<?xml-stylesheet href=\"", RelUrl, "\" type=\"text/xsl\" ?>"].
 
+signature_header(none, _Payload) ->
+    [];
+signature_header(Secret, Payload) ->
+    Sig = hex:encode(crypto:sha_mac(Secret, Payload)),
+    [{"X-Hub-Signature", "sha1=" ++ Sig}].
+
 deliver_via_post(#rabbithub_subscription{callback = Callback},
+                 Secret,
                  #basic_message{routing_key = RoutingKeyBin,
                                 content = Content0 = #content{payload_fragments_rev = PayloadRev}},
                  ExtraHeaders) ->
@@ -175,6 +163,8 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
         rabbit_call(rabbit_binary_parser, ensure_content_decoded, [Content0]),
     PayloadBin = list_to_binary(lists:reverse(PayloadRev)),
+    SigHeader = signature_header(PayloadBin, Secret),
+    ExtraHeaders1 = SigHeader ++ ExtraHeaders,
     case simple_httpc:req("POST",
                           Callback,
                           ExtraQuery,
@@ -184,7 +174,7 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
                                                 _ -> binary_to_list(ContentTypeBin)
                                             end},
                            {"X-AMQP-Routing-Key", RoutingKeyBin}
-                           | ExtraHeaders],
+                           | ExtraHeaders1 ],
                           PayloadBin) of
         {ok, StatusCode, _StatusText, _Headers, _Body} ->
             if
