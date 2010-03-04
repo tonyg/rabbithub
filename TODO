@@ -6,3 +6,15 @@ name of the underlying resource).
 
 Consider auto-renewing inbound subscriptions, based on the
 hub.lease_seconds we're given at subscription validation time.
+
+* 0.3 spec
+
+- hub.secret signatures on subscriptions
+- signatures on incoming messages (supply during generate_token?)
+   - how to know which hub.secret, unless endpoint URLs have an
+     argument
+   - which means generate_token would have to return that arg, or a 
+     201 with a Location header (generate_endpoint?)
+- automagic subscription renewal
+- (maybe) get rid of sync/async
+- topic creation, if it makes sense
