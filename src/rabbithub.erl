@@ -163,7 +163,7 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
         rabbit_call(rabbit_binary_parser, ensure_content_decoded, [Content0]),
     PayloadBin = list_to_binary(lists:reverse(PayloadRev)),
-    SigHeader = signature_header(PayloadBin, Secret),
+    SigHeader = signature_header(Secret, PayloadBin),
     ExtraHeaders1 = SigHeader ++ ExtraHeaders,
     case simple_httpc:req("POST",
                           Callback,
