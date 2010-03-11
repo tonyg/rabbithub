@@ -2,6 +2,8 @@
 
 import BaseHTTPServer
 import urlparse
+import hmac
+import hashlib
 
 def run(secret="",
         verification_code="",
@@ -35,7 +37,12 @@ def run(secret="",
                 print "Delivery: %s" % payload
             else:
                 sig = self.headers.getheader('X-Hub-Signature')
-                print "Delivery: (%s) %s" % (sig, payload)
+                csig = hmac.new(secret, payload, hashlib.sha1).hexdigest()
+                if (sig==csig):
+                    print "Signature accepted"
+                    print "Delivery %s" % payload
+                else:
+                    print "Signature invalid: supplied %s, calculated %s" % (sig, csig)
             self.send_response(202, "Accepted")
             self.end_headers()
 
@@ -43,4 +50,14 @@ def run(secret="",
     httpd.serve_forever()
 
 if __name__ == '__main__':
-    run()
+    from optparse import OptionParser
+    p = OptionParser()
+    p.add_option("-s", "--secret", dest="secret",
+                 default='',
+                 help="Secret with which to check delivery signatures")
+    p.add_option("-t", "--token", dest="token",
+                 default='',
+                 help="The token with which to verify subscriptions")
+    (options, args) = p.parse_args()
+    run(secret=options.secret,
+        verification_code=options.token)
