@@ -37,12 +37,15 @@ def run(secret="",
                 print "Delivery: %s" % payload
             else:
                 sig = self.headers.getheader('X-Hub-Signature')
-                csig = hmac.new(secret, payload, hashlib.sha1).hexdigest()
-                if (sig==csig):
-                    print "Signature accepted"
-                    print "Delivery %s" % payload
+                if sig != '' and sig.startswith("sha1="):
+                    csig = hmac.new(secret, payload, hashlib.sha1).hexdigest()
+                    if (sig[5:]==csig):
+                        print "Signature accepted"
+                        print "Delivery %s" % payload
+                    else:
+                        print "Signature invalid: supplied %s, calculated %s" % (sig, csig)
                 else:
-                    print "Signature invalid: supplied %s, calculated %s" % (sig, csig)
+                    print "No valid signature found: %s." % sig
             self.send_response(202, "Accepted")
             self.end_headers()
 

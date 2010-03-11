@@ -150,7 +150,9 @@ stylesheet_pi(RelUrl) ->
 signature_header(none, _Payload) ->
     [];
 signature_header(Secret, Payload) ->
-    Sig = hex:encode(crypto:sha_mac(Secret, Payload)),
+    Sig = mochihex:to_hex(crypto:sha_mac(Secret, Payload)),
+    %% sanity check: the hmac should be 20 bytes, making the sig 40 chars
+    40 = length(Sig),
     [{"X-Hub-Signature", "sha1=" ++ Sig}].
 
 deliver_via_post(#rabbithub_subscription{callback = Callback},
