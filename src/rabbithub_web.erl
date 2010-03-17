@@ -5,7 +5,7 @@
 -export([start/1, stop/0, loop/2]).
 
 -include("rabbithub.hrl").
--include("rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit.hrl").
 
 -define(APPLICATION_XSLT, (rabbithub:canonical_basepath() ++ "static/application.xsl.xml")).
 

@@ -1,4 +1,2 @@
 *.beam
-ebin/rabbithub.app
-Mnesia.*/
 scratch/

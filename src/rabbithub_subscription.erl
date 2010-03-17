@@ -9,7 +9,7 @@
 -export([expire/1]).
 
 -include("rabbithub.hrl").
--include("rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit.hrl").
 
 %% Should be exported by timer module, but isn't
 system_time() ->

@@ -10,9 +10,9 @@
 -export([deliver_via_post/3, error_and_unsub/2]).
 
 -include_lib("xmerl/include/xmerl.hrl").
+-include_lib("rabbit_common/include/rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit_framing.hrl").
 -include("rabbithub.hrl").
--include("rabbit.hrl").
--include("rabbit_framing.hrl").
 
 ensure_started(App) ->
     case application:start(App) of
