@@ -6,7 +6,7 @@
 
 -include("rabbithub.hrl").
 
--record(state, {subscription, rabbit_monitor_ref, queue_name}).
+-record(state, {subscription, queue_name}).
 
 init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
     process_flag(trap_exit, true),
@@ -21,19 +21,12 @@ init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
 
 really_init(Subscription = #rabbithub_subscription{resource = Resource,
                                                    topic = Topic}) ->
-    QueueName = rabbithub:r(queue, rabbithub:binstring_guid("amq.http.pseudoqueue")),
-    Q = rabbithub:rabbit_call(rabbit_amqqueue, pseudo_queue,
-                              [QueueName, self()]),
-    Q = rabbithub:rabbit_call(rabbit_amqqueue, internal_declare,
-                              [Q, false]),
-    case rabbithub:rabbit_call(rabbit_exchange, add_binding,
-                               [Resource, QueueName, list_to_binary(Topic), []]) of
+    QueueName = rabbithub:r(queue, rabbit_guid:binstring_guid("amq.http.pseudoqueue")),
+    Q = rabbit_amqqueue:pseudo_queue(QueueName, self()),
+    Q = rabbit_amqqueue:internal_declare(Q, false),
+    case rabbit_exchange:add_binding(Resource, QueueName, list_to_binary(Topic), []) of
         ok ->
-            RabbitPid = rabbithub:rabbit_call(erlang, whereis, [rabbit_sup]),
-            MonRef = erlang:monitor(process, RabbitPid),
-            {ok, #state{subscription = Subscription,
-                        rabbit_monitor_ref = MonRef,
-                        queue_name = QueueName}};
+            {ok, #state{subscription = Subscription, queue_name = QueueName}};
         {error, exchange_not_found} ->
             {stop, not_found}
     end.
@@ -63,7 +56,7 @@ terminate(_Reason, _State = #state{subscription = Subscription,
                                    queue_name = QueueName}) ->
     error_logger:info_report({stopping_pseudo_queue, _Reason, _State}),
     ok = rabbithub_subscription:erase_subscription_pid(Subscription),
-    rabbithub:rabbit_call(rabbit_amqqueue, internal_delete, [QueueName]),
+    rabbit_amqqueue:internal_delete(QueueName),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

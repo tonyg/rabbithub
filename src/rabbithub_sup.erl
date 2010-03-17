@@ -39,6 +39,7 @@ upgrade() ->
 init([]) ->
     Ip = case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end,
     Port = case os:getenv("MOCHIWEB_PORT") of false -> 8000; P -> list_to_integer(P) end,
+    %% rabbit_mochiweb:register_static_context(ContextRoot, ?MODULE, "priv/www"),
     WebConfig = [{ip, Ip},
                  {port, Port},
                  {docroot, rabbithub_deps:local_path(["priv", "www"])}],

@@ -5,8 +5,8 @@
 -export([b64enc/1, b64dec/1]).
 -export([canonical_scheme/0, canonical_host/0, canonical_basepath/0]).
 -export([default_username/0]).
--export([rabbit_node/0, rabbit_call/3, r/2, rs/1]).
--export([respond_xml/5, binstring_guid/1]).
+-export([r/2]).
+-export([respond_xml/5]).
 -export([deliver_via_post/3, error_and_unsub/2]).
 
 -include_lib("xmerl/include/xmerl.hrl").
@@ -23,7 +23,6 @@ ensure_started(App) ->
     end.
         
 start() ->
-    rabbithub_deps:ensure(),
     ensure_started(crypto),
     application:start(rabbithub).
 
@@ -43,7 +42,9 @@ get_env(EnvVar, DefaultValue) ->
 instance_key() ->
     case application:get_env(instance_key) of
         undefined ->
-            KeyBin = crypto:sha(term_to_binary({node(), now(), binstring_guid("keyseed")})),
+            KeyBin = crypto:sha(term_to_binary({node(),
+                                                now(),
+                                                rabbit_guid:binstring_guid("keyseed")})),
             application:set_env(rabbithub, instance_key, KeyBin),
             KeyBin;
         {ok, KeyBin} ->
@@ -54,7 +55,7 @@ instance_key() ->
 
 sign_term(Term) ->
     Message = #signed_term_v1{timestamp = now(),
-                              nonce = binstring_guid("nonce"),
+                              nonce = rabbit_guid:binstring_guid("nonce"),
                               term = Term},
     DataBlock = zlib:zip(term_to_binary(Message)),
     Mac = crypto:sha_mac(instance_key(), DataBlock),
@@ -129,25 +130,10 @@ canonical_basepath() -> get_env(canonical_basepath, "/").
 
 default_username() -> get_env(default_username, undefined).
 
-rabbit_node() ->
-    {ok, N} = application:get_env(rabbitmq_node),
-    N.
-
-rabbit_call(M, F, A) ->
-    case rpc:call(rabbit_node(), M, F, A) of
-        {badrpc, {'EXIT', Reason}} ->
-            exit(Reason);
-        V ->
-            V
-    end.
-
 r(ResourceType, ResourceName) when is_list(ResourceName) ->
     r(ResourceType, list_to_binary(ResourceName));
 r(ResourceType, ResourceName) ->
-    rabbit_call(rabbit_misc, r, [<<"/">>, ResourceType, ResourceName]).
-
-rs(Resource) ->
-    rabbit_call(rabbit_misc, rs, [Resource]).
+    rabbit_misc:r(<<"/">>, ResourceType, ResourceName).
 
 respond_xml(Req, StatusCode, Headers, StylesheetRelUrlOrNone, XmlElement) ->
     Req:respond({StatusCode,
@@ -157,9 +143,6 @@ respond_xml(Req, StatusCode, Headers, StylesheetRelUrlOrNone, XmlElement) ->
                    xmerl:export_simple([XmlElement],
                                        xmerl_xml,
                                        [#xmlAttribute{name=prolog, value=""}])}).
-
-binstring_guid(PrefixStr) ->
-    rabbit_call(rabbit_guid, binstring_guid, [PrefixStr]).
 
 stylesheet_pi(none) ->
     [];
@@ -173,7 +156,7 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
     ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}]),
     %% FIXME: Put more content properties into the post.
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
-        rabbit_call(rabbit_binary_parser, ensure_content_decoded, [Content0]),
+        rabbit_binary_parser:ensure_content_decoded(Content0),
     PayloadBin = list_to_binary(lists:reverse(PayloadRev)),
     case simple_httpc:req("POST",
                           Callback,

@@ -6,7 +6,6 @@
 -export([start/2,stop/1]).
 
 start(_Type, _StartArgs) ->
-    rabbithub_deps:ensure(),
     ok = contact_rabbitmq(),
     ok = setup_schema(),
     rabbithub_sup:start_link().
