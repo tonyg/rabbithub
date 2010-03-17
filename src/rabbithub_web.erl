@@ -1,38 +1,30 @@
-%% @doc Web server for rabbithub.
-
 -module(rabbithub_web).
 
--export([start/1, stop/0, loop/2]).
+-export([start/0, handle_req/1]).
 
 -include("rabbithub.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
 
--define(APPLICATION_XSLT, (rabbithub:canonical_basepath() ++ "static/application.xsl.xml")).
+-define(APPLICATION_XSLT, ("/" ++ rabbithub:canonical_basepath() ++ "/static/application.xsl.xml")).
 
 -define(DEFAULT_SUBSCRIPTION_LEASE_SECONDS, (30 * 86400)).
 -define(SUBSCRIPTION_LEASE_LIMIT, 1000 * 365 * 86400). %% Around a thousand years
 
-%% External API
+start() ->
+    application:start(rabbit_mochiweb),
+    rabbit_mochiweb:register_context_handler(rabbithub:canonical_basepath(),
+                                             fun (Req) -> ?MODULE:handle_req(Req) end).
 
-start(Options) ->
-    {DocRoot, Options1} = get_option(docroot, Options),
-    Loop = fun (Req) ->
-                   ?MODULE:loop(Req, DocRoot)
-           end,
-    ok = rabbithub_subscription:start_subscriptions(),
-    mochiweb_http:start([{name, ?MODULE}, {loop, Loop} | Options1]).
-
-stop() ->
-    mochiweb_http:stop(?MODULE).
-
-loop(Req, DocRoot) ->
-    {Path, Query, _Fragment} = mochiweb_util:urlsplit_path(Req:get(raw_path)),
+handle_req(Req) ->
+    {FullPath, Query, _Fragment} = mochiweb_util:urlsplit_path(Req:get(raw_path)),
+    %% plus one for the "/", plus one for the 1-based indexing for substr:
+    Path = string:substr(FullPath, length(rabbithub:canonical_basepath()) + 2),
     ParsedQuery = mochiweb_util:parse_qs(Query),
     case re:split(Path, "/", [{parts, 4}]) of
         [<<>>, <<"static">> | _] ->
-            handle_static(Path, DocRoot, Req);
+            handle_static(Path, Req);
         [<<>>, <<>>] ->
-            handle_static(Path, DocRoot, Req);
+            handle_static(Path, Req);
         [<<>>, Facet, ResourceType, Name] ->
             case check_resource_type(ResourceType) of
                 {ok, ResourceTypeAtom} ->
@@ -68,9 +60,12 @@ check_facet('POST', "subscribe", "subscribe", _) -> {auth_required, [read]};
 check_facet('POST', "subscribe", "unsubscribe", _) -> {auth_required, []};
 check_facet(_Method, _Facet, _HubMode, _ResourceType) -> invalid_operation.
 
-handle_static("/" ++ StaticFile, DocRoot, Req) ->
+handle_static("/" ++ StaticFile, Req) ->
     case Req:get(method) of
         Method when Method =:= 'GET'; Method =:= 'HEAD' ->
+            {file, Here} = code:is_loaded(?MODULE),
+            ModuleRoot = filename:dirname(filename:dirname(Here)),
+            DocRoot = filename:join(ModuleRoot, "priv/www"),
             Req:serve_file(StaticFile, DocRoot);
         'POST' ->
             case StaticFile of
@@ -80,7 +75,7 @@ handle_static("/" ++ StaticFile, DocRoot, Req) ->
         _ ->
             Req:respond({501, [], "Invalid HTTP method"})
     end;
-handle_static(_OtherPath, _DocRoot, Req) ->
+handle_static(_OtherPath, Req) ->
     Req:respond({400, [], "Invalid path"}).
 
 param(ParsedQuery, Key, DefaultValue) ->
@@ -667,6 +662,3 @@ perform_request(Method, Facet, HubMode, _ResourceType, Resource, ParsedQuery, Re
 
 handle_hub_post(Req) ->
     Req:respond({200, [], "You posted!"}).
-
-get_option(Option, Options) ->
-    {proplists:get_value(Option, Options), proplists:delete(Option, Options)}.

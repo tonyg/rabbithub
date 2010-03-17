@@ -7,7 +7,7 @@
     <html>
       <head>
 	<title>Application "<xsl:value-of select="/application/name"/>" (<xsl:value-of select="/application/class"/>)</title>
-	<link type="text/css" rel="stylesheet" href="/static/style.css"></link>
+	<link type="text/css" rel="stylesheet" href="/rabbithub/static/style.css"></link>
       </head>
       <body>
 	<div id="outerContainer">

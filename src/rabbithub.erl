@@ -1,6 +1,6 @@
 -module(rabbithub).
 
--export([start/0, stop/0]).
+-export([setup_schema/0]).
 -export([instance_key/0, sign_term/1, verify_term/1]).
 -export([b64enc/1, b64dec/1]).
 -export([canonical_scheme/0, canonical_host/0, canonical_basepath/0]).
@@ -9,30 +9,39 @@
 -export([respond_xml/5]).
 -export([deliver_via_post/3, error_and_unsub/2]).
 
+-rabbit_boot_step({?MODULE,
+                   [{description, "RabbitHub"},
+                    {mfa, {rabbithub, setup_schema, []}},
+                    {mfa, {rabbit_sup, start_child, [rabbithub_sup]}},
+                    {mfa, {rabbithub_web, start, []}},
+                    {mfa, {rabbithub_subscription, start_subscriptions, []}},
+                    {requires, routing_ready},
+                    {enables, networking_listening}]}).
+
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
 -include_lib("rabbit_common/include/rabbit_framing.hrl").
 -include("rabbithub.hrl").
 
-ensure_started(App) ->
-    case application:start(App) of
-        ok ->
-            ok;
-        {error, {already_started, App}} ->
-            ok
-    end.
-        
-start() ->
-    ensure_started(crypto),
-    application:start(rabbithub).
+setup_schema() ->
+    ok = create_table(rabbithub_lease,
+                      [{attributes, record_info(fields, rabbithub_lease)},
+                       {disc_copies, [node()]}]),
+    ok = create_table(rabbithub_subscription_pid,
+                      [{attributes, record_info(fields, rabbithub_subscription_pid)}]),
+    ok = mnesia:wait_for_tables([rabbithub_lease,
+                                 rabbithub_subscription_pid],
+                                5000),
+    ok.
 
-stop() ->
-    Res = application:stop(rabbithub),
-    application:stop(crypto),
-    Res.
+create_table(Name, Params) ->
+    case mnesia:create_table(Name, Params) of
+        {atomic, ok} -> ok;
+        {aborted, {already_exists, Name}} -> ok
+    end.
 
 get_env(EnvVar, DefaultValue) ->
-    case application:get_env(EnvVar) of
+    case application:get_env(rabbithub, EnvVar) of
         undefined ->
             DefaultValue;
         {ok, V} ->
@@ -40,7 +49,7 @@ get_env(EnvVar, DefaultValue) ->
     end.
 
 instance_key() ->
-    case application:get_env(instance_key) of
+    case application:get_env(rabbithub, instance_key) of
         undefined ->
             KeyBin = crypto:sha(term_to_binary({node(),
                                                 now(),
@@ -126,7 +135,7 @@ from_urlsafe(Acc, N, [C | Rest]) ->
 
 canonical_scheme() -> get_env(canonical_scheme, "http").
 canonical_host() -> get_env(canonical_host, "localhost").
-canonical_basepath() -> get_env(canonical_basepath, "/").
+canonical_basepath() -> get_env(canonical_basepath, "rabbithub").
 
 default_username() -> get_env(default_username, undefined).
 
