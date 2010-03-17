@@ -4,9 +4,14 @@
   {modules, [
     rabbithub,
     rabbithub_app,
+    rabbithub_auth,
+    rabbithub_consumer,
+    rabbithub_pseudo_queue,
+    rabbihub_subscription,
+    rabbihub_subscription_sup,
     rabbithub_sup,
     rabbithub_web,
-    rabbithub_deps
+    simple_httpc
   ]},
   {registered, []},
   {mod, {rabbithub_app, []}},
