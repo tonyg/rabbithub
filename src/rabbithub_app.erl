@@ -30,6 +30,7 @@ contact_rabbitmq() ->
     ok.
 
 setup_schema() ->
+    mnesia:stop(),
     case mnesia:create_schema([node()]) of
         ok -> ok;
         {error, {_, {already_exists, _}}} -> ok
