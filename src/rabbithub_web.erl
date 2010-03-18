@@ -328,33 +328,8 @@ can_shortcut(#resource{kind = exchange}, #resource{kind = queue}) ->
 can_shortcut(_, _) ->
     false.
 
-do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
-    Challenge = list_to_binary(rabbithub:b64enc(rabbithub:binstring_guid("c"))),
-    Params0 = [{'hub.mode', ActualUse},
-               {'hub.topic', Topic},
-               {'hub.challenge', Challenge},
-               {'hub.lease_seconds', LeaseSeconds}],
-    Params = case VerifyToken of
-                 none -> Params0;
-                 _ -> [{'hub.verify_token', VerifyToken} | Params0]
-             end,
-    case simple_httpc:req("GET", Callback, mochiweb_util:urlencode(Params), [], []) of
-        {ok, StatusCode, _StatusText, _Headers, Body}
-          when StatusCode >= 200 andalso StatusCode < 300 ->
-            if
-                Body =:= Challenge ->
-                    ok;
-                true ->
-                    {error, challenge_mismatch}
-            end;
-        {ok, StatusCode, _StatusText, _Headers, _Body} ->
-            {error, {request_status, StatusCode}};
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
-invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, LeaseSeconds, Secret, MaybeShortcut) ->
-    case Fun(Callback, Topic, LeaseSeconds, Secret, MaybeShortcut) of
+invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, LeaseSeconds, Secret, Token, MaybeShortcut) ->
+    case Fun(Callback, Topic, LeaseSeconds, Secret, Token, MaybeShortcut) of
         ok ->
             Req:respond({204, [], []});
         {error, {status, StatusCode}} ->
@@ -412,11 +387,13 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                             case can_shortcut(SourceResource, TargetResource) of
                                 true ->
                                     invoke_sub_fun_and_respond(Req, Fun,
-                                                               Callback, Topic, LeaseSeconds, Secret,
+                                                               Callback, Topic, LeaseSeconds,
+                                                               Secret, VerifyToken,
                                                                TargetResource);
                                 false ->
                                     invoke_sub_fun_and_respond(Req, Fun,
-                                                               Callback, Topic, LeaseSeconds, Secret,
+                                                               Callback, Topic, LeaseSeconds,
+                                                               Secret, VerifyToken,
                                                                no_shortcut)
                             end;
                         _ ->
@@ -431,10 +408,11 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                            fun ("async") ->
                                    Req:respond({202, [], []}),
                                    spawn(fun () ->
-                                                 case do_validate(Callback, Topic, LeaseSeconds,
+                                                 case rabbithub:do_validate(Callback, Topic, LeaseSeconds,
                                                                   ActualUse, VerifyToken) of
                                                      ok ->
-                                                         Fun(Callback, Topic, LeaseSeconds, Secret,
+                                                         Fun(Callback, Topic, LeaseSeconds,
+                                                             Secret, VerifyToken,
                                                              no_shortcut);
                                                      {error, _} ->
                                                          ignore
@@ -442,11 +420,12 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
                                          end),
                                    true;
                                ("sync") ->
-                                   case do_validate(Callback, Topic, LeaseSeconds,
+                                   case rabbithub:do_validate(Callback, Topic, LeaseSeconds,
                                                     ActualUse, VerifyToken) of
                                        ok ->
                                            invoke_sub_fun_and_respond(Req, Fun,
-                                                                      Callback, Topic, LeaseSeconds, Secret,
+                                                                      Callback, Topic, LeaseSeconds,
+                                                                      Secret, VerifyToken,
                                                                       no_shortcut);
                                        {error, Reason} ->
                                            Req:respond
@@ -631,16 +610,16 @@ perform_request('POST', subscribe, '', ResourceTypeAtom, Resource, _ParsedQuery,
 
 perform_request('POST', subscribe, subscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
     validate_subscription_request(Req, ParsedQuery, Resource, subscribe,
-                                  fun (Callback, Topic, LeaseSeconds, Secret, no_shortcut) ->
+                                  fun (Callback, Topic, LeaseSeconds, Secret, Token, no_shortcut) ->
                                           Sub = #rabbithub_subscription{resource = Resource,
                                                                         topic = Topic,
                                                                         callback = Callback},
-                                          case rabbithub_subscription:create(Sub, LeaseSeconds, Secret) of
+                                          case rabbithub_subscription:create(Sub, LeaseSeconds, Token, Secret) of
                                               ok -> ok;
                                               {error, not_found} -> {error, {status, 404}};
                                               {error, _} -> {error, {status, 500}}
                                           end;
-                                      (_Callback, Topic, _LeaseSeconds, _Secret, TargetResource) ->
+                                      (_Callback, Topic, _LeaseSeconds, _Secret, _Token, TargetResource) ->
                                           case rabbithub:rabbit_call(rabbit_exchange,
                                                                      add_binding,
                                                                      [Resource, TargetResource,
@@ -654,13 +633,13 @@ perform_request('POST', subscribe, subscribe, _ResourceTypeAtom, Resource, Parse
 
 perform_request('POST', subscribe, unsubscribe, _ResourceTypeAtom, Resource, ParsedQuery, Req) ->
     validate_subscription_request(Req, ParsedQuery, Resource, unsubscribe,
-                                  fun (Callback, Topic, _LeaseSeconds, _Secret, no_shortcut) ->
+                                  fun (Callback, Topic, _LeaseSeconds, _Secret, _Token, no_shortcut) ->
                                           Sub = #rabbithub_subscription{resource = Resource,
                                                                         topic = Topic,
                                                                         callback = Callback},
                                           ok = rabbithub_subscription:delete(Sub),
                                           ok;
-                                      (_Callback, Topic, _LeaseSeconds, _Secret, TargetResource) ->
+                                      (_Callback, Topic, _LeaseSeconds, _Secret, _Token, TargetResource) ->
                                           case rabbithub:rabbit_call(rabbit_exchange,
                                                                      delete_binding,
                                                                      [Resource, TargetResource,

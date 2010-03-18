@@ -6,7 +6,7 @@
 -export([default_username/0]).
 -export([rabbit_node/0, rabbit_call/3, r/2, rs/1]).
 -export([respond_xml/5, binstring_guid/1]).
--export([deliver_via_post/4, error_and_unsub/2]).
+-export([deliver_via_post/4, do_validate/5, error_and_unsub/2]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include("rabbithub.hrl").
@@ -111,7 +111,7 @@ canonical_basepath() -> get_env(canonical_basepath, "/").
 default_username() -> get_env(default_username, undefined).
 
 rabbit_node() ->
-    {ok, N} = application:get_env(rabbitmq_node),
+    {ok, N} = application:get_env(rabbithub, rabbitmq_node),
     N.
 
 rabbit_call(M, F, A) ->
@@ -185,6 +185,31 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
                 true ->
                     {error, StatusCode}
             end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
+    Challenge = list_to_binary(b64enc(binstring_guid("c"))),
+    Params0 = [{'hub.mode', ActualUse},
+               {'hub.topic', Topic},
+               {'hub.challenge', Challenge},
+               {'hub.lease_seconds', LeaseSeconds}],
+    Params = case VerifyToken of
+                 none -> Params0;
+                 _ -> [{'hub.verify_token', VerifyToken} | Params0]
+             end,
+    case simple_httpc:req("GET", Callback, mochiweb_util:urlencode(Params), [], []) of
+        {ok, StatusCode, _StatusText, _Headers, Body}
+          when StatusCode >= 200 andalso StatusCode < 300 ->
+            if
+                Body =:= Challenge ->
+                    ok;
+                true ->
+                    {error, challenge_mismatch}
+            end;
+        {ok, StatusCode, _StatusText, _Headers, _Body} ->
+            {error, {request_status, StatusCode}};
         {error, Reason} ->
             {error, Reason}
     end.
