@@ -5,7 +5,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("rabbithub.hrl").
--include("rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit.hrl").
 
 -record(state, {subscription, secret, q_monitor_ref, consumer_tag}).
 
@@ -22,13 +22,12 @@ init([Lease = #rabbithub_lease{subscription = Subscription,
     end.
 
 really_init(Subscription = #rabbithub_subscription{resource = Resource}, Secret) ->
-    case rabbithub:rabbit_call(rabbit_amqqueue, lookup, [Resource]) of
+    case rabbit_amqqueue:lookup(Resource) of
         {ok, Q = #amqqueue{pid = QPid}} ->
-            ConsumerTag = rabbithub:binstring_guid("amq.http.consumer"),
+            ConsumerTag = rabbit_guid:binstring_guid("amq.http.consumer"),
             MonRef = erlang:monitor(process, QPid),
-            rabbithub:rabbit_call(rabbit_amqqueue, basic_consume,
-                                  [Q, false, self(), self(), undefined,
-                                   ConsumerTag, false, undefined]),
+            rabbit_amqqueue:basic_consume(Q, false, self(), self(), undefined,
+                                          ConsumerTag, false, undefined),
             {ok, #state{subscription = Subscription,
                         secret = Secret,
                         q_monitor_ref = MonRef,
@@ -50,11 +49,10 @@ handle_cast({deliver, _ConsumerTag, AckRequired,
                                     BasicMessage,
                                     [{"X-AMQP-Redelivered", atom_to_list(Redelivered)}]) of
         {ok, _} ->
-            ok = rabbithub:rabbit_call(rabbit_amqqueue, notify_sent, [QPid, self()]),
+            ok = rabbit_amqqueue:notify_sent(QPid, self()),
             case AckRequired of
                 true ->
-                    ok = rabbithub:rabbit_call(rabbit_amqqueue, ack,
-                                               [QPid, none, [MsgId], self()]);
+                    ok = rabbit_amqqueue:ack(QPid, none, [MsgId], self());
                 false ->
                     ok
             end;

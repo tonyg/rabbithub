@@ -21,8 +21,8 @@ check_authentication(Req, Fun) ->
     end.
 
 check_authorization(Req, Resource, Username, PermissionsRequired, Fun) ->
-    CheckResults = [catch rabbithub:rabbit_call(rabbit_access_control, check_resource_access,
-                                                [list_to_binary(Username), Resource, P])
+    CheckResults = [catch rabbit_access_control:check_resource_access(
+                            list_to_binary(Username), Resource, P)
                     || P <- PermissionsRequired],
     case lists:foldl(fun check_authorization_result/2, ok, CheckResults) of
         ok ->
@@ -50,9 +50,8 @@ check_auth_info(AuthInfo) ->
                        [U, P] -> {U, P};
                        [U] -> {U, ""}
                    end,
-    case catch rabbithub:rabbit_call(rabbit_access_control, user_pass_login,
-                                     [list_to_binary(User),
-                                      list_to_binary(Pass)]) of
+    case catch rabbit_access_control:user_pass_login(list_to_binary(User),
+                                                     list_to_binary(Pass)) of
         {'EXIT', {amqp, access_refused, _, _}} ->
             {error, access_refused};
         _ ->
