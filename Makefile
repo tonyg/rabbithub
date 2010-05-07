@@ -1,6 +1,7 @@
 PACKAGE=rabbithub
 DEPS=rabbitmq-server rabbitmq-erlang-client rabbitmq-mochiweb
 RUNTIME_DEPS=rabbitmq-mochiweb
+EXTRA_PACKAGE_DIRS=priv
 include ../include.mk
 
 MARKDOWN_SOURCES=$(wildcard doc/*.md)
