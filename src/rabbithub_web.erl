@@ -15,12 +15,27 @@ start() ->
     rabbit_mochiweb:register_context_handler(rabbithub:canonical_basepath(),
                                              fun (Req) -> ?MODULE:handle_req(Req) end).
 
+split_path("", _) ->
+    [<<>>];
+split_path(Path, 1) ->
+    [list_to_binary(Path)];
+split_path(Path, N) ->
+    case string:str(Path, "/") of
+        0 ->
+            [list_to_binary(Path)];
+        Pos ->
+            [list_to_binary(string:substr(Path, 1, Pos - 1))
+             | split_path(string:substr(Path, Pos + 1), N - 1)]
+    end.
+
 handle_req(Req) ->
     {FullPath, Query, _Fragment} = mochiweb_util:urlsplit_path(Req:get(raw_path)),
     %% plus one for the "/", plus one for the 1-based indexing for substr:
     Path = string:substr(FullPath, length(rabbithub:canonical_basepath()) + 2),
     ParsedQuery = mochiweb_util:parse_qs(Query),
-    case re:split(Path, "/", [{parts, 4}]) of
+    %% When we get to drop support for R12B-3, we can start using
+    %% re:split(Path, "/", [{parts, 4}]) again.
+    case split_path(Path, 4) of
         [<<>>, <<"static">> | _] ->
             handle_static(Path, Req);
         [<<>>, <<>>] ->
