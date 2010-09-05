@@ -13,7 +13,8 @@
 start() ->
     application:start(rabbit_mochiweb),
     rabbit_mochiweb:register_context_handler(rabbithub:canonical_basepath(),
-                                             fun (Req) -> ?MODULE:handle_req(Req) end).
+                                             fun (Req) -> ?MODULE:handle_req(Req) end,
+                                             "RabbitHub").
 
 split_path("", _) ->
     [<<>>];
