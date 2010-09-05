@@ -1,6 +1,6 @@
 {application, rabbithub,
  [{description, "rabbithub"},
-  {vsn, "0.0.1"},
+  {vsn, "%%VSN%%"},
   {modules, [
     rabbithub,
     rabbithub_auth,
