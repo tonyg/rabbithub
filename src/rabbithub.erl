@@ -15,12 +15,11 @@
                     {mfa, {rabbit_sup, start_child, [rabbithub_sup]}},
                     {mfa, {rabbithub_web, start, []}},
                     {mfa, {rabbithub_subscription, start_subscriptions, []}},
-                    {requires, routing_ready},
-                    {enables, networking_listening}]}).
+                    {requires, routing_ready}]}).
 
 -include_lib("xmerl/include/xmerl.hrl").
--include_lib("rabbit_common/include/rabbit.hrl").
--include_lib("rabbit_common/include/rabbit_framing.hrl").
+-include_lib("rabbit.hrl").
+-include_lib("rabbit_framing.hrl").
 -include("rabbithub.hrl").
 
 setup_schema() ->
@@ -53,7 +52,7 @@ instance_key() ->
         undefined ->
             KeyBin = crypto:sha(term_to_binary({node(),
                                                 now(),
-                                                rabbit_guid:binstring_guid("keyseed")})),
+                                                rabbit_guid:binary(rabbit_guid:gen(), "keyseed")})),
             application:set_env(rabbithub, instance_key, KeyBin),
             KeyBin;
         {ok, KeyBin} ->
@@ -64,7 +63,7 @@ instance_key() ->
 
 sign_term(Term) ->
     Message = #signed_term_v1{timestamp = now(),
-                              nonce = rabbit_guid:binstring_guid("nonce"),
+                              nonce = rabbit_guid:binary(rabbit_guid:gen(), "nonce"),
                               term = Term},
     DataBlock = zlib:zip(term_to_binary(Message)),
     Mac = crypto:sha_mac(instance_key(), DataBlock),
@@ -159,10 +158,11 @@ stylesheet_pi(RelUrl) ->
     ["<?xml-stylesheet href=\"", RelUrl, "\" type=\"text/xsl\" ?>"].
 
 deliver_via_post(#rabbithub_subscription{callback = Callback},
-                 #basic_message{routing_key = RoutingKeyBin,
+                 #basic_message{routing_keys = RoutingKeyBin,
                                 content = Content0 = #content{payload_fragments_rev = PayloadRev}},
                  ExtraHeaders) ->
-    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}]),
+    [RoutingKey|XX] = RoutingKeyBin,
+    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKey}]),
     %% FIXME: Put more content properties into the post.
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
         rabbit_binary_parser:ensure_content_decoded(Content0),

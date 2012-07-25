@@ -1,5 +1,7 @@
 -module(rabbithub_auth).
 
+-include("rabbit.hrl").
+
 -export([check_authentication/2, check_authorization/5]).
 
 check_authentication(Req, Fun) ->
@@ -22,8 +24,10 @@ check_authentication(Req, Fun) ->
 
 check_authorization(Req, Resource, Username, PermissionsRequired, Fun) ->
     CheckResults = [catch rabbit_access_control:check_resource_access(
-                            list_to_binary(Username), Resource, P)
-                    || P <- PermissionsRequired],
+                            #user{username = list_to_binary(Username),
+                                         auth_backend = rabbit_auth_backend_internal},
+			                 Resource, P)
+			|| P <- PermissionsRequired],
     case lists:foldl(fun check_authorization_result/2, ok, CheckResults) of
         ok ->
             Fun();
@@ -50,7 +54,7 @@ check_auth_info(AuthInfo) ->
                        [U, P] -> {U, P};
                        [U] -> {U, ""}
                    end,
-    case catch rabbit_access_control:user_pass_login(list_to_binary(User),
+    case catch rabbit_access_control:check_user_pass_login(list_to_binary(User),
                                                      list_to_binary(Pass)) of
         {'EXIT', {amqp, access_refused, _, _}} ->
             {error, access_refused};
