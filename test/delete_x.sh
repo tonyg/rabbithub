@@ -1,3 +1,3 @@
 #!/bin/bash
 
-curl -X DELETE http://guest:guest@localhost:8000/endpoint/x/"$1"
+curl -X DELETE http://guest:guest@localhost:55670/endpoint/x/"$1"
