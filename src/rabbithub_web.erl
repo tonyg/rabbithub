@@ -1,9 +1,9 @@
 -module(rabbithub_web).
 
--export([start/0, handle_req/1]).
+-export([start/0, handle_req/2]).
 
 -include("rabbithub.hrl").
--include_lib("rabbit_common/include/rabbit.hrl").
+-include_lib("rabbit.hrl").
 
 -define(APPLICATION_XSLT, ("/" ++ rabbithub:canonical_basepath() ++ "/static/application.xsl.xml")).
 
@@ -12,8 +12,8 @@
 
 start() ->
     application:start(rabbit_mochiweb),
-    rabbit_mochiweb:register_context_handler(rabbithub:canonical_basepath(),
-                                             fun (Req) -> ?MODULE:handle_req(Req) end,
+    rabbit_mochiweb:register_context_handler(rabbithub:canonical_basepath(), "",
+                                             fun (_, Req) -> ?MODULE:handle_req("/", Req) end,
                                              "RabbitHub").
 
 split_path("", _) ->
@@ -29,10 +29,10 @@ split_path(Path, N) ->
              | split_path(string:substr(Path, Pos + 1), N - 1)]
     end.
 
-handle_req(Req) ->
+handle_req(AliasPrefix, Req) ->
     {FullPath, Query, _Fragment} = mochiweb_util:urlsplit_path(Req:get(raw_path)),
     %% plus one for the "/", plus one for the 1-based indexing for substr:
-    Path = string:substr(FullPath, length(rabbithub:canonical_basepath()) + 2),
+    Path = FullPath,
     ParsedQuery = mochiweb_util:parse_qs(Query),
     %% When we get to drop support for R12B-3, we can start using
     %% re:split(Path, "/", [{parts, 4}]) again.
@@ -53,7 +53,7 @@ handle_req(Req) ->
                     Req:not_found()
             end;
         _ ->
-            Req:not_found()
+	    Req:not_found()
     end.
 
 %% Internal API
@@ -130,7 +130,7 @@ handle_request(ResourceTypeAtom, Facet, Resource, ParsedQuery, Req) ->
                                                ParsedQuery,
                                                Req)
                        end);
-        auth_not_required ->
+         auth_not_required ->
             perform_request(Method,
                             list_to_atom(Facet),
                             list_to_atom(HubMode),
@@ -270,7 +270,7 @@ declare_queue(Resource = #resource{kind = queue, name = QueueNameBin}, _ParsedQu
                            {ok, _} ->
                                Req:respond({204, [], []});
                            {error, not_found} ->
-                               rabbit_amqqueue:declare(Resource, true, false, []),
+                               rabbit_amqqueue:declare(Resource, true, false, [], none),
                                QN = binary_to_list(QueueNameBin),
                                Req:respond({201,
                                             [{"Location",
@@ -336,7 +336,7 @@ can_shortcut(_, _) ->
     false.
 
 do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
-    Challenge = list_to_binary(rabbithub:b64enc(rabbit_guid:binstring_guid("c"))),
+    Challenge = list_to_binary(rabbithub:b64enc(rabbit_guid:binary(rabbit_guid:gen(), "c"))),
     Params0 = [{'hub.mode', ActualUse},
                {'hub.topic', Topic},
                {'hub.challenge', Challenge},
@@ -469,7 +469,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
             end
     end.
 
-extract_message(ExchangeResource, ParsedQuery, Req) ->
+extract_x_message(ExchangeResource, ParsedQuery, Req) ->
     RoutingKey = param(ParsedQuery, "hub.topic", ""),
     ContentTypeBin = case Req:get_header_value("content-type") of
                          undefined -> undefined;
@@ -481,9 +481,23 @@ extract_message(ExchangeResource, ParsedQuery, Req) ->
                          [{'content_type', ContentTypeBin}],
                          Body).
 
+extract_q_message(QueueResource, ParsedQuery, Req) ->
+    ExchangeResource = rabbithub:r(exchange, ""),
+    RoutingKey = QueueResource#resource.name,
+    ContentTypeBin = case Req:get_header_value("content-type") of
+                         undefined -> undefined;
+                         S -> list_to_binary(S)
+                     end,
+    Body = Req:recv_body(),
+    rabbit_basic:message(ExchangeResource,
+                         RoutingKey,
+                         [{'content_type', ContentTypeBin}],
+                         Body).
+
+
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
-    Msg = extract_message(Resource, ParsedQuery, Req),
-    Delivery = rabbit_basic:delivery(false, false, none, Msg),
+    Msg = extract_x_message(Resource, ParsedQuery, Req),
+    Delivery = rabbit_basic:delivery(false, false, Msg, none),
     case rabbit_basic:publish(Delivery) of
         {ok, _, _} ->
             Req:respond({202, [], []});
@@ -491,17 +505,18 @@ perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
             Req:not_found()
     end;
 
+%% Sending to a queue using the default exchange. Note that the queue name is
+%% determined from the URL path info, not hub.topic
 perform_request('POST', endpoint, '', queue, Resource, ParsedQuery, Req) ->
-    Msg = extract_message(rabbithub:r(exchange, ""), ParsedQuery, Req),
+    Msg = extract_q_message(Resource, ParsedQuery, Req),
     IsMandatory = case param(ParsedQuery, "amqp.mandatory", "") of
                       "true" -> true;
                       _ -> false
                   end,
-    Delivery = rabbit_basic:delivery(IsMandatory, false, none, Msg),
-    case rabbit_amqqueue:lookup(Resource) of
-        {ok, #amqqueue{pid = QPid}} ->
-            true = rabbit_amqqueue:deliver(QPid, Delivery),
-            Req:respond({case IsMandatory of true -> 204; false -> 202 end, [], []});
+    Delivery = rabbit_basic:delivery(IsMandatory, false, Msg, none),
+    case rabbit_basic:publish(Delivery) of
+        {ok, _, _} ->
+           Req:respond({case IsMandatory of true -> 204; false -> 202 end, [], []});
         {error, not_found} ->
             Req:not_found()
     end;
@@ -516,7 +531,7 @@ perform_request('PUT', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
                 {ok, _} ->
                     Req:respond({204, [], []});
                 {error, not_found} ->
-                    rabbit_exchange:declare(Resource, ExchangeType, true, false, []),
+                    rabbit_exchange:declare(Resource, ExchangeType, true, false, false, []),
                     Req:respond({201, [{"Location", self_url(Req)}], []})
             end
     end;
@@ -524,7 +539,7 @@ perform_request('PUT', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
 perform_request('PUT', endpoint, '', queue, UncheckedResource, ParsedQuery, Req) ->
     case UncheckedResource of
         #resource{kind = queue, name = <<>>} ->
-            V = rabbithub:r(queue, rabbit_guid:binstring_guid("amq.gen.http")),
+            V = rabbithub:r(queue, rabbit_guid:binary(rabbit_guid:gen(), "amq.gen.http")),
             declare_queue(V, ParsedQuery, Req);
         %% FIXME should use rabbit_channel:check_name/2, but that's not exported:
         #resource{kind = queue, name = <<"amq.", _/binary>>} ->
@@ -638,9 +653,11 @@ perform_request('POST', subscribe, subscribe, _ResourceTypeAtom, Resource, Parse
                                               {error, _} -> {error, {status, 500}}
                                           end;
                                       (_Callback, Topic, _LeaseSeconds, TargetResource) ->
-                                          case rabbit_exchange:add_binding(
-                                                 Resource, TargetResource,
-                                                 list_to_binary(Topic), []) of
+                                          case rabbit_binding:add(
+                                                 #binding{source      = Resource,
+                                                          destination = TargetResource,
+                                                          key         = list_to_binary(Topic),
+                                                          args        = []}) of
                                               ok ->
                                                   ok;
                                               {error, _} ->
@@ -657,9 +674,11 @@ perform_request('POST', subscribe, unsubscribe, _ResourceTypeAtom, Resource, Par
                                           ok = rabbithub_subscription:delete(Sub),
                                           ok;
                                       (_Callback, Topic, _LeaseSeconds, TargetResource) ->
-                                          case rabbit_exchange:delete_binding(
-                                                 Resource, TargetResource,
-                                                 list_to_binary(Topic), []) of
+                                          case rabbit_binding:remove(
+                                                 #binding{source      = Resource,
+                                                          destination = TargetResource,
+                                                          key         = list_to_binary(Topic),
+                                                          args        = []}) of
                                               ok ->
                                                   ok;
                                               {error, _} ->

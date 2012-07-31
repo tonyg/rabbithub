@@ -5,7 +5,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("rabbithub.hrl").
--include_lib("rabbit_common/include/rabbit.hrl").
+-include_lib("rabbit.hrl").
 
 -record(state, {subscription, q_monitor_ref, consumer_tag}).
 
@@ -23,9 +23,9 @@ init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
 really_init(Subscription = #rabbithub_subscription{resource = Resource}) ->
     case rabbit_amqqueue:lookup(Resource) of
         {ok, Q = #amqqueue{pid = QPid}} ->
-            ConsumerTag = rabbit_guid:binstring_guid("amq.http.consumer"),
+            ConsumerTag = rabbit_guid:binary(rabbit_guid:gen(), "amq.http.consumer"),
             MonRef = erlang:monitor(process, QPid),
-            rabbit_amqqueue:basic_consume(Q, false, self(), self(), undefined,
+            rabbit_amqqueue:basic_consume(Q, false, self(), undefined,
                                           ConsumerTag, false, undefined),
             {ok, #state{subscription = Subscription,
                         q_monitor_ref = MonRef,
@@ -49,7 +49,7 @@ handle_cast({deliver, _ConsumerTag, AckRequired,
             ok = rabbit_amqqueue:notify_sent(QPid, self()),
             case AckRequired of
                 true ->
-                    ok = rabbit_amqqueue:ack(QPid, none, [MsgId], self());
+                    ok = rabbit_amqqueue:ack(QPid, [MsgId], self());
                 false ->
                     ok
             end;
