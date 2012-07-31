@@ -674,9 +674,11 @@ perform_request('POST', subscribe, unsubscribe, _ResourceTypeAtom, Resource, Par
                                           ok = rabbithub_subscription:delete(Sub),
                                           ok;
                                       (_Callback, Topic, _LeaseSeconds, TargetResource) ->
-                                          case rabbit_exchange_type_topic:remove_bindings(
-                                                 Resource, TargetResource,
-                                                 list_to_binary(Topic)) of
+                                          case rabbit_binding:remove(
+                                                 #binding{source      = Resource,
+                                                          destination = TargetResource,
+                                                          key         = list_to_binary(Topic),
+                                                          args        = []}) of
                                               ok ->
                                                   ok;
                                               {error, _} ->
@@ -695,4 +697,3 @@ perform_request(Method, Facet, HubMode, _ResourceType, Resource, ParsedQuery, Re
 
 handle_hub_post(Req) ->
     Req:respond({200, [], "You posted!"}).
-
