@@ -14,4 +14,4 @@
   ]},
   {registered, []},
   {env, [{default_username, "guest"}]},
-  {applications, [kernel, stdlib, crypto, rabbit_mochiweb, amqp_client]}]}.
+  {applications, [kernel, stdlib, crypto, rabbitmq_mochiweb, amqp_client]}]}.
