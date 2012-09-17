@@ -2,7 +2,6 @@ include ../umbrella.mk
 
 # From the old build system:
 # RUNTIME_DEPS=rabbitmq-mochiweb
-# EXTRA_PACKAGE_DIRS=priv
 
 MARKDOWN_SOURCES=$(wildcard doc/*.md)
 MARKDOWN_TARGETS=$(patsubst doc/%.md,doc/html/%.html,$(MARKDOWN_SOURCES))
