@@ -3,7 +3,7 @@
 -export([start/0, handle_req/2]).
 
 -include("rabbithub.hrl").
--include_lib("rabbit.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
 
 -define(APPLICATION_XSLT, ("/" ++ rabbithub:canonical_basepath() ++ "/static/application.xsl.xml")).
 

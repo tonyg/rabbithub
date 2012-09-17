@@ -5,7 +5,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("rabbithub.hrl").
--include_lib("rabbit.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
 
 -record(state, {subscription, q_monitor_ref, consumer_tag}).
 

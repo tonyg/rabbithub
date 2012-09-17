@@ -1,6 +1,6 @@
 -module(rabbithub_auth).
 
--include("rabbit.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
 
 -export([check_authentication/2, check_authorization/5]).
 

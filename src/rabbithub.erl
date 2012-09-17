@@ -18,8 +18,7 @@
                     {requires, routing_ready}]}).
 
 -include_lib("xmerl/include/xmerl.hrl").
--include_lib("rabbit.hrl").
--include_lib("rabbit_framing.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
 -include("rabbithub.hrl").
 
 setup_schema() ->
