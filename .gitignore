@@ -1,2 +1,5 @@
-*.beam
+dist/
+doc/html/
+ebin/
+build/
 scratch/
