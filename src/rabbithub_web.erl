@@ -469,7 +469,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
             end
     end.
 
-extract_x_message(ExchangeResource, ParsedQuery, Req) ->
+extract_message(ExchangeResource, ParsedQuery, Req) ->
     RoutingKey = param(ParsedQuery, "hub.topic", ""),
     ContentTypeBin = case Req:get_header_value("content-type") of
                          undefined -> undefined;
@@ -481,22 +481,8 @@ extract_x_message(ExchangeResource, ParsedQuery, Req) ->
                          [{'content_type', ContentTypeBin}],
                          Body).
 
-extract_q_message(QueueResource, ParsedQuery, Req) ->
-    ExchangeResource = rabbithub:r(exchange, ""),
-    RoutingKey = QueueResource#resource.name,
-    ContentTypeBin = case Req:get_header_value("content-type") of
-                         undefined -> undefined;
-                         S -> list_to_binary(S)
-                     end,
-    Body = Req:recv_body(),
-    rabbit_basic:message(ExchangeResource,
-                         RoutingKey,
-                         [{'content_type', ContentTypeBin}],
-                         Body).
-
-
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
-    Msg = extract_x_message(Resource, ParsedQuery, Req),
+    Msg = extract_message(Resource, ParsedQuery, Req),
     Delivery = rabbit_basic:delivery(false, false, Msg, none),
     case rabbit_basic:publish(Delivery) of
         {ok, _, _} ->
@@ -505,19 +491,14 @@ perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
             Req:not_found()
     end;
 
-%% Sending to a queue using the default exchange. Note that the queue name is
-%% determined from the URL path info, not hub.topic
 perform_request('POST', endpoint, '', queue, Resource, ParsedQuery, Req) ->
-    Msg = extract_q_message(Resource, ParsedQuery, Req),
-    IsMandatory = case param(ParsedQuery, "amqp.mandatory", "") of
-                      "true" -> true;
-                      _ -> false
-                  end,
-    Delivery = rabbit_basic:delivery(IsMandatory, false, Msg, none),
-    case rabbit_basic:publish(Delivery) of
-        {ok, _, _} ->
-           Req:respond({case IsMandatory of true -> 204; false -> 202 end, [], []});
-        {error, not_found} ->
+    Msg = extract_message(rabbithub:r(exchange, ""), ParsedQuery, Req),
+    Delivery = rabbit_basic:delivery(false, false, Msg, none),
+    case rabbit_amqqueue:lookup([Resource]) of
+        [Queue] ->
+            {routed, _} = rabbit_amqqueue:deliver([Queue], Delivery),
+            Req:respond({202, [], []});
+        [] ->
             Req:not_found()
     end;
 
