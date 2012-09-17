@@ -157,11 +157,10 @@ stylesheet_pi(RelUrl) ->
     ["<?xml-stylesheet href=\"", RelUrl, "\" type=\"text/xsl\" ?>"].
 
 deliver_via_post(#rabbithub_subscription{callback = Callback},
-                 #basic_message{routing_keys = RoutingKeyBin,
+                 #basic_message{routing_keys = [RoutingKeyBin | _],
                                 content = Content0 = #content{payload_fragments_rev = PayloadRev}},
                  ExtraHeaders) ->
-    [RoutingKey|XX] = RoutingKeyBin,
-    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKey}]),
+    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}]),
     %% FIXME: Put more content properties into the post.
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
         rabbit_binary_parser:ensure_content_decoded(Content0),
