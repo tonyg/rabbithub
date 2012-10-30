@@ -483,7 +483,7 @@ extract_message(ExchangeResource, ParsedQuery, Req) ->
 
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
     Msg = extract_message(Resource, ParsedQuery, Req),
-    Delivery = rabbit_basic:delivery(false, false, Msg, none),
+    Delivery = rabbit_basic:delivery(false, Msg, none),
     case rabbit_basic:publish(Delivery) of
         {ok, _, _} ->
             Req:respond({202, [], []});
@@ -493,7 +493,7 @@ perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
 
 perform_request('POST', endpoint, '', queue, Resource, ParsedQuery, Req) ->
     Msg = extract_message(rabbithub:r(exchange, ""), ParsedQuery, Req),
-    Delivery = rabbit_basic:delivery(false, false, Msg, none),
+    Delivery = rabbit_basic:delivery(false, Msg, none),
     case rabbit_amqqueue:lookup([Resource]) of
         [Queue] ->
             {routed, _} = rabbit_amqqueue:deliver([Queue], Delivery),
