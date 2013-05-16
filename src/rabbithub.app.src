@@ -1,0 +1,13 @@
+{application,rabbithub,
+             [{description,"rabbithub"},
+              {vsn,"3.1.0"},
+              {modules,[rabbithub,rabbithub_auth,rabbithub_consumer,
+                        rabbithub_pseudo_queue,rabbithub_subscription,
+                        rabbithub_subscription_sup,rabbithub_sup,
+                        rabbithub_web,simple_httpc]},
+              {registered,[]},
+              {env,[{listener,[{port,15670}]},
+                    {default_username,"guest"}]},
+              {applications,[kernel,stdlib,crypto,rabbitmq_web_dispatch,
+                             mochiweb]}]}.
+
