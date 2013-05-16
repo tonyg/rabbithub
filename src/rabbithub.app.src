@@ -8,6 +8,5 @@
               {registered,[]},
               {env,[{listener,[{port,15670}]},
                     {default_username,"guest"}]},
-              {applications,[kernel,stdlib,crypto,rabbitmq_web_dispatch,
-                             mochiweb]}]}.
+              {applications,[kernel,stdlib,crypto,rabbitmq_web_dispatch,mochiweb]}]}.
 
