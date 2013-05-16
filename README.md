@@ -67,7 +67,7 @@ rather than anything intrinsic in pubsub-over-webhooks.
 
 ## Installation
 
-To install from source:
+To install from source (requires Erlang R15B01 or higher):
 
     git clone https://github.com/brc859844/rabbithub
     cd rabbithub
@@ -80,6 +80,7 @@ Enable the plugin:
 
     rabbitmq-plugins enable rabbithub
 
+By default the plugin will listen for HTTP requests on port 15670.
 
 ## HTTP messaging in the Browser
 
