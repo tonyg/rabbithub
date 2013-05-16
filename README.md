@@ -65,6 +65,22 @@ Again, RabbitHub is content-agnostic, so the fact that Atom appears is
 an artifact of what Google's public PSHB instance is mailing out,
 rather than anything intrinsic in pubsub-over-webhooks.
 
+## Installation
+
+To install from source:
+
+    git clone https://github.com/brc859844/rabbithub
+    cd rabbithub
+    make deps
+    make
+    make package
+    cp dist/*.ez $RABBITMQ_HOME/plugins
+
+Enable the plugin:
+
+    rabbitmq-plugins enable rabbithub
+
+
 ## HTTP messaging in the Browser
 
 In order to push AMQP messages out to a webpage running in a browser,
