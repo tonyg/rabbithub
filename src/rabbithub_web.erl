@@ -1,9 +1,10 @@
 -module(rabbithub_web).
 
--export([start/0, handle_req/2]).
+-export([start/0, handle_req/1, listener/0]).
 
 -include("rabbithub.hrl").
--include_lib("rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit_framing.hrl").
 
 -define(APPLICATION_XSLT, ("/" ++ rabbithub:canonical_basepath() ++ "/static/application.xsl.xml")).
 
@@ -11,10 +12,14 @@
 -define(SUBSCRIPTION_LEASE_LIMIT, 1000 * 365 * 86400). %% Around a thousand years
 
 start() ->
-    application:start(rabbit_mochiweb),
-    rabbit_mochiweb:register_context_handler(rabbithub:canonical_basepath(), "",
-                                             fun (_, Req) -> ?MODULE:handle_req("/", Req) end,
+    Listener = listener(),
+    rabbit_web_dispatch:register_context_handler(rabbithub:canonical_basepath(), Listener, "",
+                                             fun (Req) -> ?MODULE:handle_req(Req) end,
                                              "RabbitHub").
+
+listener() ->
+    {ok, Listener} = application:get_env(rabbithub, listener),
+    Listener.
 
 split_path("", _) ->
     [<<>>];
@@ -29,14 +34,18 @@ split_path(Path, N) ->
              | split_path(string:substr(Path, Pos + 1), N - 1)]
     end.
 
-handle_req(AliasPrefix, Req) ->
+%% handle_req(AliasPrefix, Req) ->
+handle_req(Req) ->
     {FullPath, Query, _Fragment} = mochiweb_util:urlsplit_path(Req:get(raw_path)),
     %% plus one for the "/", plus one for the 1-based indexing for substr:
     Path = FullPath,
     ParsedQuery = mochiweb_util:parse_qs(Query),
     %% When we get to drop support for R12B-3, we can start using
     %% re:split(Path, "/", [{parts, 4}]) again.
-    case split_path(Path, 4) of
+
+    %% case split_path(Path, 4) of
+    %% BRC
+    case split_path(Path, 5) of
         [<<>>, <<"static">> | _] ->
             handle_static(Path, Req);
         [<<>>, <<>>] ->
@@ -47,6 +56,18 @@ handle_req(AliasPrefix, Req) ->
                     handle_request(ResourceTypeAtom,
                                    binary_to_list(Facet),
                                    rabbithub:r(ResourceTypeAtom, binary_to_list(Name)),
+                                   ParsedQuery,
+                                   Req);
+                {error, invalid_resource_type} ->
+                    Req:not_found()
+            end;
+        %% BRC
+        [<<>>, VHost, Facet, ResourceType, Name] ->
+            case check_resource_type(ResourceType) of
+                {ok, ResourceTypeAtom} ->
+                    handle_request(ResourceTypeAtom,
+                                   binary_to_list(Facet),
+                                   rabbithub:r(VHost, ResourceTypeAtom, binary_to_list(Name)),
                                    ParsedQuery,
                                    Req);
                 {error, invalid_resource_type} ->
@@ -469,7 +490,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
             end
     end.
 
-extract_x_message(ExchangeResource, ParsedQuery, Req) ->
+extract_message(ExchangeResource, ParsedQuery, Req) ->
     RoutingKey = param(ParsedQuery, "hub.topic", ""),
     ContentTypeBin = case Req:get_header_value("content-type") of
                          undefined -> undefined;
@@ -481,23 +502,9 @@ extract_x_message(ExchangeResource, ParsedQuery, Req) ->
                          [{'content_type', ContentTypeBin}],
                          Body).
 
-extract_q_message(QueueResource, ParsedQuery, Req) ->
-    ExchangeResource = rabbithub:r(exchange, ""),
-    RoutingKey = QueueResource#resource.name,
-    ContentTypeBin = case Req:get_header_value("content-type") of
-                         undefined -> undefined;
-                         S -> list_to_binary(S)
-                     end,
-    Body = Req:recv_body(),
-    rabbit_basic:message(ExchangeResource,
-                         RoutingKey,
-                         [{'content_type', ContentTypeBin}],
-                         Body).
-
-
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
-    Msg = extract_x_message(Resource, ParsedQuery, Req),
-    Delivery = rabbit_basic:delivery(false, false, Msg, none),
+    Msg = extract_message(Resource, ParsedQuery, Req),
+    Delivery = rabbit_basic:delivery(false, Msg, none),
     case rabbit_basic:publish(Delivery) of
         {ok, _, _} ->
             Req:respond({202, [], []});
@@ -505,19 +512,14 @@ perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
             Req:not_found()
     end;
 
-%% Sending to a queue using the default exchange. Note that the queue name is
-%% determined from the URL path info, not hub.topic
 perform_request('POST', endpoint, '', queue, Resource, ParsedQuery, Req) ->
-    Msg = extract_q_message(Resource, ParsedQuery, Req),
-    IsMandatory = case param(ParsedQuery, "amqp.mandatory", "") of
-                      "true" -> true;
-                      _ -> false
-                  end,
-    Delivery = rabbit_basic:delivery(IsMandatory, false, Msg, none),
-    case rabbit_basic:publish(Delivery) of
-        {ok, _, _} ->
-           Req:respond({case IsMandatory of true -> 204; false -> 202 end, [], []});
-        {error, not_found} ->
+    Msg = extract_message(rabbithub:r(exchange, ""), ParsedQuery, Req),
+    Delivery = rabbit_basic:delivery(false, Msg, none),
+    case rabbit_amqqueue:lookup([Resource]) of
+        [Queue] ->
+            {routed, _} = rabbit_amqqueue:deliver([Queue], Delivery),
+            Req:respond({202, [], []});
+        [] ->
             Req:not_found()
     end;
 

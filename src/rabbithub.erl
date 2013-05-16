@@ -5,7 +5,7 @@
 -export([b64enc/1, b64dec/1]).
 -export([canonical_scheme/0, canonical_host/0, canonical_basepath/0]).
 -export([default_username/0]).
--export([r/2]).
+-export([r/3,r/2]).
 -export([respond_xml/5]).
 -export([deliver_via_post/3, error_and_unsub/2]).
 
@@ -18,8 +18,8 @@
                     {requires, routing_ready}]}).
 
 -include_lib("xmerl/include/xmerl.hrl").
--include_lib("rabbit.hrl").
--include_lib("rabbit_framing.hrl").
+-include_lib("rabbit_common/include/rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit_framing.hrl").
 -include("rabbithub.hrl").
 
 setup_schema() ->
@@ -143,6 +143,12 @@ r(ResourceType, ResourceName) when is_list(ResourceName) ->
 r(ResourceType, ResourceName) ->
     rabbit_misc:r(<<"/">>, ResourceType, ResourceName).
 
+%% BRC (want to make vhost variable)
+r(VHost, ResourceType, ResourceName) when is_list(ResourceName) ->
+    r(VHost, ResourceType, list_to_binary(ResourceName));
+r(VHost, ResourceType, ResourceName) ->
+    rabbit_misc:r(VHost, ResourceType, ResourceName).
+
 respond_xml(Req, StatusCode, Headers, StylesheetRelUrlOrNone, XmlElement) ->
     Req:respond({StatusCode,
                  [{"Content-type", "text/xml"}] ++ Headers,
@@ -158,11 +164,10 @@ stylesheet_pi(RelUrl) ->
     ["<?xml-stylesheet href=\"", RelUrl, "\" type=\"text/xsl\" ?>"].
 
 deliver_via_post(#rabbithub_subscription{callback = Callback},
-                 #basic_message{routing_keys = RoutingKeyBin,
+                 #basic_message{routing_keys = [RoutingKeyBin | _],
                                 content = Content0 = #content{payload_fragments_rev = PayloadRev}},
                  ExtraHeaders) ->
-    [RoutingKey|XX] = RoutingKeyBin,
-    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKey}]),
+    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}]),
     %% FIXME: Put more content properties into the post.
     #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
         rabbit_binary_parser:ensure_content_decoded(Content0),

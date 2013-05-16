@@ -54,7 +54,7 @@ req(Host, Port, Method, Path, Headers, Body) ->
         {ok, Sock} ->
             RequestBin = list_to_binary(format_request(Method, Path, Headers, Body)),
             ok = gen_tcp:send(Sock, RequestBin),
-            error_logger:info_report({request, Host, Port, RequestBin}),
+            %% error_logger:info_report({request, Host, Port, RequestBin}),
             %% ok = gen_tcp:shutdown(Sock, write),
             collect_response(Sock, {httpc_response, parse, [nolimit, true]});
         {error, Reason} ->

@@ -1,6 +1,7 @@
 -module(rabbithub_auth).
 
--include("rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit.hrl").
+-include_lib("rabbit_common/include/rabbit_framing.hrl").
 
 -export([check_authentication/2, check_authorization/5]).
 

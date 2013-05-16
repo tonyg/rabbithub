@@ -1,3 +1,3 @@
 #!/bin/bash
 
-curl -v -X PUT http://guest:guest@localhost:55670/endpoint/q/"$1"
+curl -v -X PUT http://guest:guest@localhost:15670/endpoint/q/"$1"

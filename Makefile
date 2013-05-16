@@ -1,32 +1,38 @@
-PACKAGE=rabbithub
-APPNAME=rabbithub
-DEPS=rabbitmq-server rabbitmq-erlang-client rabbitmq-mochiweb
-RUNTIME_DEPS=rabbitmq-mochiweb
-EXTRA_PACKAGE_DIRS=priv
-include ../include.mk
+VSN=3.0.1
+PACKAGE=rabbithub-$(VSN)
+DIST_DIR=dist
+EBIN_DIR=ebin
+INCLUDE_DIRS=
+DEPS_DIR=deps
+DEPS ?= 
+DEPS_EZ=$(foreach DEP, $(DEPS), $(DEPS_DIR)/$(DEP).ez)
+RABBITMQ_HOME ?= .
 
-MARKDOWN_SOURCES=$(wildcard doc/*.md)
-MARKDOWN_TARGETS=$(patsubst doc/%.md,doc/html/%.html,$(MARKDOWN_SOURCES))
+all: compile
 
-docs: html-docs
+clean:
+	rm -rf $(DIST_DIR)
+	rm -rf $(EBIN_DIR)
 
-html-docs: doc/html $(MARKDOWN_TARGETS)
+distclean: clean
+	rm -rf $(DEPS_DIR)
 
-doc/html:
-	mkdir -p doc/html
+package: compile $(DEPS_EZ)
+	rm -f $(DIST_DIR)/$(PACKAGE).ez
+	mkdir -p $(DIST_DIR)/$(PACKAGE)
+	cp -r $(EBIN_DIR) $(DIST_DIR)/$(PACKAGE)
+	$(foreach EXTRA_DIR, $(INCLUDE_DIRS), cp -r $(EXTRA_DIR) $(DIST_DIR)/$(PACKAGE);)
+	(cd $(DIST_DIR); zip -r $(PACKAGE).ez $(PACKAGE))
 
-doc/html/%.html: doc/%.md
-	(title=`grep '^# ' $< | head -1 | sed -e 's:^# ::'` ;\
-	 t=/tmp/$*.md ;\
-	 sed -e "s:@TITLE@:$$title:g" < doc/header.html > $@ ;\
-	 python doc/buildtoc.py < $< > $$t ;\
-	 markdown $$t >> $@ ;\
-	 rm $$t ;\
-	 cat doc/footer.html >> $@)
+install: package
+	$(foreach DEP, $(DEPS_EZ), cp $(DEP) $(RABBITMQ_HOME)/plugins;)
+	cp $(DIST_DIR)/$(PACKAGE).ez $(RABBITMQ_HOME)/plugins
 
-clean:: clean-docs
+$(DEPS_DIR):
+	./rebar get-deps
 
-clean-docs: clean-html
+$(DEPS_EZ): 
+	cd $(DEPS_DIR); $(foreach DEP, $(DEPS), zip -r $(DEP).ez $(DEP);)
 
-clean-html:
-	rm -rf doc/html
+compile: $(DEPS_DIR)
+	./rebar compile
