@@ -11,11 +11,13 @@
 -define(DEFAULT_SUBSCRIPTION_LEASE_SECONDS, (30 * 86400)).
 -define(SUBSCRIPTION_LEASE_LIMIT, 1000 * 365 * 86400). %% Around a thousand years
 
+
 start() ->
     Listener = listener(),
     rabbit_web_dispatch:register_context_handler(rabbithub:canonical_basepath(), Listener, "",
                                              fun (Req) -> ?MODULE:handle_req(Req) end,
-                                             "RabbitHub").
+                                             "RabbitHub"),
+    ok.
 
 listener() ->
     {ok, Listener} = application:get_env(rabbithub, listener),

@@ -39,7 +39,18 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource,
 handle_call(Request, _From, State) ->
     {stop, {unhandled_call, Request}, State}.
 
-handle_cast({deliver, Delivery = #delivery{message = BasicMessage}, Flow},
+handle_cast({deliver, _Delivery = #delivery{message = BasicMessage}, _MS, _Flow},
+            State = #state{subscription = Subscription}) ->
+    case rabbithub:deliver_via_post(Subscription, BasicMessage, []) of
+        {ok, _} ->
+            ok;
+        {error, Reason} ->
+            ok = rabbithub:error_and_unsub(Subscription,
+                                           {rabbithub_pseudo_queue, http_post_failure, Reason})
+    end,
+    {noreply, State};
+
+handle_cast({deliver, _Delivery = #delivery{message = BasicMessage}, _Flow},
             State = #state{subscription = Subscription}) ->
     case rabbithub:deliver_via_post(Subscription, BasicMessage, []) of
         {ok, _} ->
@@ -62,7 +73,8 @@ terminate(_Reason, _State = #state{subscription = Subscription,
                                    queue_name = QueueName}) ->
     error_logger:info_report({stopping_pseudo_queue, _Reason, _State}),
     ok = rabbithub_subscription:erase_subscription_pid(Subscription),
-    rabbit_amqqueue:internal_delete(QueueName, self()),
+%%    rabbit_amqqueue:internal_delete(QueueName, self()),
+    rabbit_amqqueue:internal_delete(QueueName),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

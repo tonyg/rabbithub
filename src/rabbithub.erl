@@ -15,6 +15,8 @@
                     {mfa, {rabbit_sup, start_child, [rabbithub_sup]}},
                     {mfa, {rabbithub_web, start, []}},
                     {mfa, {rabbithub_subscription, start_subscriptions, []}},
+		    {requires, kernel_ready},
+		    {requires, database},
                     {requires, routing_ready}]}).
 
 -include_lib("xmerl/include/xmerl.hrl").
