@@ -1,5 +1,7 @@
 -module(rabbithub).
+-behaviour(application).
 
+-export([start/2, stop/1]).
 -export([setup_schema/0]).
 -export([instance_key/0, sign_term/1, verify_term/1]).
 -export([b64enc/1, b64dec/1]).
@@ -9,20 +11,23 @@
 -export([respond_xml/5]).
 -export([deliver_via_post/3, error_and_unsub/2]).
 
--rabbit_boot_step({?MODULE,
-                   [{description, "RabbitHub"},
-                    {mfa, {rabbithub, setup_schema, []}},
-                    {mfa, {rabbit_sup, start_child, [rabbithub_sup]}},
-                    {mfa, {rabbithub_web, start, []}},
-                    {mfa, {rabbithub_subscription, start_subscriptions, []}},
-		    {requires, kernel_ready},
-		    {requires, database},
-                    {requires, routing_ready}]}).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
 -include_lib("rabbit_common/include/rabbit_framing.hrl").
 -include("rabbithub.hrl").
+
+start(_Type, _StartArgs) ->
+%%    io:format("BRC: Running startup~n"),
+    setup_schema(),
+    rabbithub_web:start(),
+    rabbithub_subscription:start_subscriptions(),
+    rabbithub_sup:start_link().
+
+
+stop(_State) ->
+%%  TBD
+    ok.
 
 setup_schema() ->
     ok = create_table(rabbithub_lease,
