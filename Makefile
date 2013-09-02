@@ -8,7 +8,7 @@ DEPS ?=
 DEPS_EZ=$(foreach DEP, $(DEPS), $(DEPS_DIR)/$(DEP).ez)
 RABBITMQ_HOME ?= .
 
-all: compile
+all: compile package
 
 clean:
 	rm -rf $(DIST_DIR)

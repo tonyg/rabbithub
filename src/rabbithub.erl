@@ -17,12 +17,14 @@
 -include_lib("rabbit_common/include/rabbit_framing.hrl").
 -include("rabbithub.hrl").
 
+
 start(_Type, _StartArgs) ->
 %%    io:format("BRC: Running startup~n"),
     setup_schema(),
+    {ok, Pid} = rabbithub_sup:start_link(),
     rabbithub_web:start(),
     rabbithub_subscription:start_subscriptions(),
-    rabbithub_sup:start_link().
+    {ok, Pid}.
 
 
 stop(_State) ->
