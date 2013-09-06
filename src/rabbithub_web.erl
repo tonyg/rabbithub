@@ -358,30 +358,71 @@ can_shortcut(#resource{kind = exchange}, #resource{kind = queue}) ->
 can_shortcut(_, _) ->
     false.
 
+
 do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
-    Challenge = list_to_binary(rabbithub:b64enc(rabbit_guid:binary(rabbit_guid:gen(), "c"))),
-    Params0 = [{'hub.mode', ActualUse},
-               {'hub.topic', Topic},
-               {'hub.challenge', Challenge},
-               {'hub.lease_seconds', LeaseSeconds}],
-    Params = case VerifyToken of
-                 none -> Params0;
-                 _ -> [{'hub.verify_token', VerifyToken} | Params0]
-             end,
-    case simple_httpc:req("GET", Callback, mochiweb_util:urlencode(Params), [], []) of
-        {ok, StatusCode, _StatusText, _Headers, Body}
-          when StatusCode >= 200 andalso StatusCode < 300 ->
-            if
-                Body =:= Challenge ->
-                    ok;
-                true ->
-                    {error, challenge_mismatch}
+    case catch mochiweb_util:urlsplit(Callback) of
+        {_Scheme, _NetLoc, _Path, ExistingQuery, _Fragment} ->   	%% Scheme can be http or https
+           Challenge = list_to_binary(rabbithub:b64enc(rabbit_guid:binary(rabbit_guid:gen(), "c"))),
+           Params0 = [{'hub.mode', ActualUse},
+                      {'hub.topic', Topic},
+                      {'hub.challenge', Challenge},
+                      {'hub.lease_seconds', LeaseSeconds}],
+
+           Params = case VerifyToken of
+                        none -> Params0;
+                         _ -> [{'hub.verify_token', VerifyToken} | Params0]
+                    end,
+
+           C = case ExistingQuery of
+                   "" -> "?";
+                   _  -> "&"
+               end,
+
+           URL = Callback ++ C ++ mochiweb_util:urlencode(Params),
+
+           case httpc:request(get, {URL, []}, [], []) of
+               {ok, {{_Version, StatusCode, _StatusText}, _Headers, Body}} 
+                  when StatusCode >= 200 andalso StatusCode < 300 ->
+                     BinaryBody = list_to_binary(Body),
+                     if
+                        Challenge =:= BinaryBody ->
+                            ok;
+                        true ->
+                            {error, challenge_mismatch}
+                     end;
+               {ok, {{_Version, StatusCode, _StatusText}, _Headers, _Body}} ->
+                   {error, {request_status, StatusCode}};
+               {error, Reason} ->
+                   {error, Reason}
             end;
-        {ok, StatusCode, _StatusText, _Headers, _Body} ->
-            {error, {request_status, StatusCode}};
-        {error, Reason} ->
-            {error, Reason}
+        _ ->
+            {error, invalid_callback_url}
     end.
+
+%% do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
+%%    Challenge = list_to_binary(rabbithub:b64enc(rabbit_guid:binary(rabbit_guid:gen(), "c"))),
+%%    Params0 = [{'hub.mode', ActualUse},
+%%               {'hub.topic', Topic},
+%%               {'hub.challenge', Challenge},
+%%               {'hub.lease_seconds', LeaseSeconds}],
+%%    Params = case VerifyToken of
+%%                 none -> Params0;
+%%                 _ -> [{'hub.verify_token', VerifyToken} | Params0]
+%%             end,
+%%    case simple_httpc:req("GET", Callback, mochiweb_util:urlencode(Params), [], []) of
+%%        {ok, StatusCode, _StatusText, _Headers, Body}
+%%          when StatusCode >= 200 andalso StatusCode < 300 ->
+%%            if
+%%                Body =:= Challenge ->
+%%                    ok;
+%%                true ->
+%%                    {error, challenge_mismatch}
+%%            end;
+%%        {ok, StatusCode, _StatusText, _Headers, _Body} ->
+%%            {error, {request_status, StatusCode}};
+%%        {error, Reason} ->
+%%             {error, Reason}
+%%    end.
 
 invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, LeaseSeconds, MaybeShortcut) ->
     case Fun(Callback, Topic, LeaseSeconds, MaybeShortcut) of
@@ -696,7 +737,7 @@ perform_request(Method, Facet, HubMode, _ResourceType, Resource, ParsedQuery, Re
                                 {hubmode, [atom_to_list(HubMode)]},
                                 {resource, [rabbit_misc:rs(Resource)]},
                                 {querystr, [io_lib:format("~p", [ParsedQuery])]}]},
-    error_logger:error_report({perform_request, unknown, Xml}),
+    rabbit_log:info("RabbitHub performing request ~p~n", [Xml]),
     rabbithub:respond_xml(Req, 200, [], none, Xml).
 
 handle_hub_post(Req) ->

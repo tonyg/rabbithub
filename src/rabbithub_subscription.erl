@@ -51,7 +51,7 @@ delete(Subscription) ->
     ok.
 
 expire(Subscription) ->
-    error_logger:info_report({expiring, Subscription}),
+    rabbit_log:info("RabbitHub expiring subscription~n~p~n", [Subscription]),
     delete(Subscription).
 
 start_link(Lease =
@@ -78,7 +78,7 @@ start(Lease) ->
 
 register_subscription_pid(Lease, Pid, ProcessModule) ->
     Result = register_subscription_pid1(Lease, Pid),
-    error_logger:info_report({startup, Result, ProcessModule, Lease}),
+    rabbit_log:info("RabbitHub register subscription (startup); ~p~n~p~n~p~n", [Result, ProcessModule, Lease]),
     Result.
 
 register_subscription_pid1(#rabbithub_lease{subscription = Subscription,

@@ -68,7 +68,7 @@ handle_info(Request, State) ->
     {stop, {unhandled_info, Request}, State}.
 
 terminate(_Reason, _State = #state{subscription = Subscription}) ->
-    error_logger:info_report({stopping_consumer, _Reason, _State}),
+    rabbit_log:info("RabbitHub stopping consumer, ~p~n~p~n", [_Reason, _State]),
     ok = rabbithub_subscription:erase_subscription_pid(Subscription),
     ok.
 

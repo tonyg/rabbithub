@@ -19,11 +19,11 @@
 
 
 start(_Type, _StartArgs) ->
-%%    io:format("BRC: Running startup~n"),
     setup_schema(),
     {ok, Pid} = rabbithub_sup:start_link(),
     rabbithub_web:start(),
     rabbithub_subscription:start_subscriptions(),
+    rabbit_log:info("RabbitHub started~n"),
     {ok, Pid}.
 
 
@@ -204,6 +204,6 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
     end.
 
 error_and_unsub(Subscription, ErrorReport) ->
-    error_logger:error_report(ErrorReport),
+    rabbit_log:error("RabbitHub unsubscribing~n~p~n", [ErrorReport]),
     rabbithub_subscription:delete(Subscription),
     ok.

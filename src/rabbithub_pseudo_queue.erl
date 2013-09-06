@@ -71,7 +71,7 @@ handle_info(Request, State) ->
 
 terminate(_Reason, _State = #state{subscription = Subscription,
                                    queue_name = QueueName}) ->
-    error_logger:info_report({stopping_pseudo_queue, _Reason, _State}),
+    rabbit_log:info("RabbitHub stopping pseudo queue, ~p~n~p~n", [_Reason, _State]),
     ok = rabbithub_subscription:erase_subscription_pid(Subscription),
 %%    rabbit_amqqueue:internal_delete(QueueName, self()),
     rabbit_amqqueue:internal_delete(QueueName),
