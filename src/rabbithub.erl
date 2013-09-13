@@ -19,6 +19,7 @@
 
 
 start(_Type, _StartArgs) ->
+%% TBD - should check return status of a few things here!
     setup_schema(),
     ssl:start(),
     {ok, Pid} = rabbithub_sup:start_link(),
@@ -29,7 +30,6 @@ start(_Type, _StartArgs) ->
 
 
 stop(_State) ->
-%%  TBD
     ok.
 
 setup_schema() ->
