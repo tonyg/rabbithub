@@ -514,7 +514,8 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
 get_msg_delivery_mode(PersistMsg) ->
    case PersistMsg of
         "1" -> 2;
-        "0" -> 1
+        "0" -> 1;
+         _  -> 1
    end.
 
 extract_message(ExchangeResource, ParsedQuery, Req) ->
