@@ -399,30 +399,6 @@ do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
             {error, invalid_callback_url}
     end.
 
-%% do_validate(Callback, Topic, LeaseSeconds, ActualUse, VerifyToken) ->
-%%    Challenge = list_to_binary(rabbithub:b64enc(rabbit_guid:binary(rabbit_guid:gen(), "c"))),
-%%    Params0 = [{'hub.mode', ActualUse},
-%%               {'hub.topic', Topic},
-%%               {'hub.challenge', Challenge},
-%%               {'hub.lease_seconds', LeaseSeconds}],
-%%    Params = case VerifyToken of
-%%                 none -> Params0;
-%%                 _ -> [{'hub.verify_token', VerifyToken} | Params0]
-%%             end,
-%%    case simple_httpc:req("GET", Callback, mochiweb_util:urlencode(Params), [], []) of
-%%        {ok, StatusCode, _StatusText, _Headers, Body}
-%%          when StatusCode >= 200 andalso StatusCode < 300 ->
-%%            if
-%%                Body =:= Challenge ->
-%%                    ok;
-%%                true ->
-%%                    {error, challenge_mismatch}
-%%            end;
-%%        {ok, StatusCode, _StatusText, _Headers, _Body} ->
-%%            {error, {request_status, StatusCode}};
-%%        {error, Reason} ->
-%%             {error, Reason}
-%%    end.
 
 invoke_sub_fun_and_respond(Req, Fun, Callback, Topic, LeaseSeconds, MaybeShortcut) ->
     case Fun(Callback, Topic, LeaseSeconds, MaybeShortcut) of
@@ -533,16 +509,26 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
             end
     end.
 
+% QueryString hub.persistmsg = 0, DeliveryMode = 1 -> non-persistent message
+% QueryString hub.persistmsg = 1, DeliveryMode = 2 -> persistent message (saved to disk)
+get_msg_delivery_mode(PersistMsg) ->
+   case PersistMsg of
+        "1" -> 2;
+        "0" -> 1
+   end.
+
 extract_message(ExchangeResource, ParsedQuery, Req) ->
     RoutingKey = param(ParsedQuery, "hub.topic", ""),
+    DeliveryMode = get_msg_delivery_mode(param(ParsedQuery, "hub.persistmsg", "0")),
     ContentTypeBin = case Req:get_header_value("content-type") of
                          undefined -> undefined;
                          S -> list_to_binary(S)
                      end,
     Body = Req:recv_body(),
+%%  rabbit_log:info("RabbitHub message delivery mode: ~p~n", [DeliveryMode]),
     rabbit_basic:message(ExchangeResource,
                          list_to_binary(RoutingKey),
-                         [{'content_type', ContentTypeBin}],
+                         [{'content_type', ContentTypeBin},{'delivery_mode',DeliveryMode}],
                          Body).
 
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->

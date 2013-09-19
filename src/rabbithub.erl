@@ -213,37 +213,6 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
     end.
 
 
-%% deliver_via_post(#rabbithub_subscription{callback = Callback},
-%%                 #basic_message{routing_keys = [RoutingKeyBin | _],
-%%                                content = Content0 = #content{payload_fragments_rev = PayloadRev}},
-%%                 ExtraHeaders) ->
-%%    ExtraQuery = mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}]),
-%%    %% FIXME: Put more content properties into the post.
-%%    #content{properties = #'P_basic'{content_type = ContentTypeBin}} =
-%%        rabbit_binary_parser:ensure_content_decoded(Content0),
-%%    PayloadBin = list_to_binary(lists:reverse(PayloadRev)),
-%%    case simple_httpc:req("POST",
-%%                          Callback,
-%%                          ExtraQuery,
-%%                          [{"Content-length", integer_to_list(size(PayloadBin))},
-%%                           {"Content-type", case ContentTypeBin of
-%%                                                undefined -> "application/octet-stream";
-%%                                                _ -> binary_to_list(ContentTypeBin)
-%%                                            end},
-%%                           {"X-AMQP-Routing-Key", RoutingKeyBin}
-%%                           | ExtraHeaders],
-%%                          PayloadBin) of
-%%        {ok, StatusCode, _StatusText, _Headers, _Body} ->
-%%            if
-%%                StatusCode >= 200 andalso StatusCode < 300 ->
-%%                    {ok, StatusCode};
-%%                true ->
-%%                    {error, StatusCode}
-%%             end;
-%%        {error, Reason} ->
-%%            {error, Reason}
-%%    end.
-
 error_and_unsub(Subscription, ErrorReport) ->
     rabbit_log:error("RabbitHub unsubscribing~n~p~n", [ErrorReport]),
     rabbithub_subscription:delete(Subscription),
