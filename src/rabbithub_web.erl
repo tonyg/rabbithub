@@ -511,6 +511,7 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
 
 % QueryString hub.persistmsg = 0, DeliveryMode = 1 -> non-persistent message
 % QueryString hub.persistmsg = 1, DeliveryMode = 2 -> persistent message (saved to disk)
+% If hub.persistmsg is anything other than 0 or 1 then assume non-persistent
 get_msg_delivery_mode(PersistMsg) ->
    case PersistMsg of
         "1" -> 2;
