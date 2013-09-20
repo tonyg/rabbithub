@@ -509,14 +509,19 @@ validate_subscription_request(Req, ParsedQuery, SourceResource, ActualUse, Fun) 
             end
     end.
 
-% QueryString hub.persistmsg = 0, DeliveryMode = 1 -> non-persistent message
-% QueryString hub.persistmsg = 1, DeliveryMode = 2 -> persistent message (saved to disk)
-% If hub.persistmsg is anything other than 0 or 1 then assume non-persistent
+% QueryString hub.persistmsg = 0 or false, DeliveryMode = 1 -> non-persistent message
+% QueryString hub.persistmsg = 1 or true , DeliveryMode = 2 -> persistent message (saved to disk)
+% If hub.persistmsg is anything other than 0/false or 1/true then assume non-persistent, but log 
+% the fact that an invalid value was supplied.
 get_msg_delivery_mode(PersistMsg) ->
    case PersistMsg of
         "1" -> 2;
         "0" -> 1;
-         _  -> 1
+        "true"  -> 2;
+        "false" -> 1;
+         _ -> 
+            rabbit_log:info("RabbitHub received invalid delivery mode option: ~p~n", [PersistMsg]),
+            1
    end.
 
 extract_message(ExchangeResource, ParsedQuery, Req) ->
