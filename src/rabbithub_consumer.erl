@@ -27,7 +27,7 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource}) ->
             ConsumerTag = rabbit_guid:binary(rabbit_guid:gen(), "amq.http.consumer"),
             MonRef = erlang:monitor(process, QPid),
             rabbit_amqqueue:basic_consume(Q, false, self(), undefined, false,
-                                          ConsumerTag, false, none, undefined),
+                                          ConsumerTag, false, none, [], undefined),
             {ok, #state{subscription = Subscription,
                         q_monitor_ref = MonRef,
                         consumer_tag = ConsumerTag}};

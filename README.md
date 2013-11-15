@@ -82,6 +82,16 @@ Enable the plugin:
 
 By default the plugin will listen for HTTP requests on port 15670.
 
+## Downloads
+
+RabbitMQ 3.2.1
+ - Binary: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.2.1.ez> 
+ - Source: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.2.1-src.tar.gz> (includes binary)
+
+RabbitMQ 3.1.5
+ - Binary: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.1.5.ez> 
+ - Source: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.1.5-src.tar.gz> (includes binary)
+
 ## HTTP messaging in the Browser
 
 In order to push AMQP messages out to a webpage running in a browser,

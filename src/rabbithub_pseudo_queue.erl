@@ -21,10 +21,21 @@ init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
             {stop, normal}
     end.
 
+%% Added for 3.2.1 as rabbit_amqqueue:pseudo_queue/2 does not correctly initialise
+%% all fields (in particular, for 3.2.1 we need to correctly initialise "decorators").
+pseudo_queue(QueueName, Pid) ->
+    #amqqueue{name         = QueueName,
+              durable      = false,
+              auto_delete  = false,
+              arguments    = [],
+              pid          = Pid,
+              slave_pids   = [],
+              decorators   = []}.
+
 really_init(Subscription = #rabbithub_subscription{resource = Resource,
                                                    topic = Topic}) ->
     QueueName = rabbithub:r(queue, rabbit_guid:binary(rabbit_guid:gen(), "amq.http.pseudoqueue")),
-    Q = rabbit_amqqueue:pseudo_queue(QueueName, self()),
+    Q = pseudo_queue(QueueName, self()),
     Q = rabbit_amqqueue:internal_declare(Q, false),
    case rabbit_binding:add(#binding{source      = Resource,
                                     destination = QueueName,
