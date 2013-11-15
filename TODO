@@ -6,3 +6,6 @@ name of the underlying resource).
 
 Consider auto-renewing inbound subscriptions, based on the
 hub.lease_seconds we're given at subscription validation time.
+
+Implement some mechanism to obtain a list of subscriptions (with appropriate permissions).
+
