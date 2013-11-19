@@ -1,4 +1,4 @@
-VSN=3.1.5
+VSN=3.2.1
 PACKAGE=rabbithub-$(VSN)
 DIST_DIR=dist
 EBIN_DIR=ebin
