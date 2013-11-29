@@ -22,10 +22,18 @@ start(_Type, _StartArgs) ->
 %% TBD - should check return status of a few things here!
     setup_schema(),
     ssl:start(),
+
+    %% Sort out HTTP client options
+    HttpOpts =  get_env(http_client_options, []), 
+    ok = httpc:set_options(HttpOpts),
+    {ok, Opts} = httpc:get_options(all),
+
     {ok, Pid} = rabbithub_sup:start_link(),
     rabbithub_web:start(),
     rabbithub_subscription:start_subscriptions(),
+
     rabbit_log:info("RabbitHub started~n"),
+    rabbit_log:info("RabbitHub HTTP client options:~n~p~n", [Opts]),
     {ok, Pid}.
 
 
