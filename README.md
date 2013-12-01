@@ -110,6 +110,21 @@ Javascript using the same tools.
   [RabbitMQ]: http://www.rabbitmq.com/
   [rabbitmq-xmpp]: http://hg.rabbitmq.com/rabbitmq-xmpp/raw-file/default/doc/overview-summary.html
 
+## Proxy server support
+
+If RabbitHub is being used behind a firewall, it may be necessary to route HTTP(s) requests to callback URLs via a proxy server. A proxy server can be specified for RabbitHub by defining `http_client_options` in `rabbitmq.config` as illustrated below, where the same proxy server has been specified for both HTTP and HTTPS, and the proxy server will not be used for requests to `localhost`.
+
+    [
+       {rabbithub, [
+          {http_client_options, [
+              {proxy,{{"10.1.1.1",8080}, ["localhost"]}},
+              {https_proxy,{{"10.1.1.1",8080},["localhost"]}}
+          ]}
+      ]}
+    ].
+
+Note that proxy server support is only available in RabbitHub for RabbitMQ 3.2.1 or higher.
+
 ## Software License
 
 RabbitHub is [open-source](http://www.opensource.org/) code, licensed
