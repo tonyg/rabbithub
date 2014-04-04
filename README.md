@@ -86,6 +86,10 @@ Note that if no username is specified for HTTP requests submitted to RabbitHub t
 
 ## Downloads
 
+RabbitMQ 3.3.0
+ - Binary: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.3.0.ez> 
+ - Source: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.3.0-src.tar.gz> (includes binary)
+
 RabbitMQ 3.2.1
  - Binary: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.2.1.ez> 
  - Source: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.2.1-src.tar.gz> (includes binary)
