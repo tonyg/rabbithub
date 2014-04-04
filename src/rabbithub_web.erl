@@ -540,9 +540,9 @@ extract_message(ExchangeResource, ParsedQuery, Req) ->
 
 perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
     Msg = extract_message(Resource, ParsedQuery, Req),
-    Delivery = rabbit_basic:delivery(false, Msg, none),
+    Delivery = rabbit_basic:delivery(false, false, Msg, undefined),
     case rabbit_basic:publish(Delivery) of
-        {ok, _, _} ->
+        {ok,  _} ->
             Req:respond({202, [], []});
         {error, not_found} ->
             Req:not_found()
@@ -550,10 +550,10 @@ perform_request('POST', endpoint, '', exchange, Resource, ParsedQuery, Req) ->
 
 perform_request('POST', endpoint, '', queue, Resource, ParsedQuery, Req) ->
     Msg = extract_message(rabbithub:r(exchange, ""), ParsedQuery, Req),
-    Delivery = rabbit_basic:delivery(false, Msg, none),
+    Delivery = rabbit_basic:delivery(false, false, Msg, undefined),
     case rabbit_amqqueue:lookup([Resource]) of
         [Queue] ->
-            {routed, _} = rabbit_amqqueue:deliver([Queue], Delivery),
+            _QPids = rabbit_amqqueue:deliver([Queue], Delivery),
             Req:respond({202, [], []});
         [] ->
             Req:not_found()

@@ -1,6 +1,6 @@
 {application,rabbithub,
              [{description,"rabbithub"},
-              {vsn,"3.2.1"},
+              {vsn,"3.3.0"},
               {modules,[rabbithub,rabbithub_auth,rabbithub_consumer,
                         rabbithub_pseudo_queue,rabbithub_subscription,
                         rabbithub_subscription_sup,rabbithub_sup,
