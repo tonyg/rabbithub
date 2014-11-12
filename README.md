@@ -84,20 +84,6 @@ By default the plugin will listen for HTTP requests on port 15670.
 
 Note that if no username is specified for HTTP requests submitted to RabbitHub then RabbitHub checks to see whether a default username has been specified for the rabbithub application, and if so uses it. By default RabbitHub is configured to use a default username of `guest` (see the definition of `default_username` in `rabbithub.app`). This configuration might be reasonable for development and testing (aside from security testing); however for production environments this will most likely not be ideal, and the default username should therefore be deleted or changed to a RabbitMQ username that has only the required permissions. It is generally also a good idea to disable the RabbitMQ `guest` user, or to at least reduce the permissions of `guest` (when RabbitMQ is initially installed, the username `guest` has full permissions and a rather well-known password).   
 
-## Downloads
-
-RabbitMQ 3.3.0
- - Binary: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.3.0.ez> 
- - Source: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.3.0-src.tar.gz> (includes binary)
-
-RabbitMQ 3.2.1
- - Binary: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.2.1.ez> 
- - Source: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.2.1-src.tar.gz> (includes binary)
-
-RabbitMQ 3.1.5
- - Binary: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.1.5.ez> 
- - Source: <https://region-a.geo-1.objects.hpcloudsvc.com:443/v1/66395568832599/RabbitHub/rabbithub-3.1.5-src.tar.gz> (includes binary)
-
 ## HTTP messaging in the Browser
 
 In order to push AMQP messages out to a webpage running in a browser,
