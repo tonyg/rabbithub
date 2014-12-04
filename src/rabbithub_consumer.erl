@@ -63,12 +63,12 @@ handle_cast({deliver, _ConsumerTag, AckRequired,
                 true ->
                     %% If requeue_on_http_post_error is set to false then messages associated with
                     %% failed HTTP POSTs will be dropped or published to a dead letter exchange (if
-                    %% one is associated with the queue in subscription queue in question). Note 
+                    %% one is associated with the subscription queue in question). Note 
                     %% that this ties in with setting the prefetch count to 1 (see above), which
                     %% ensures that at most 2 messages will be rejected per error before the
                     %% subscription gets deleted and the consumer processes is terminated. This
                     %% setting is primarily intended for debugging purposes. For example, bad data
-                    %% might cause the receiving web application to break. For using this setting
+                    %% might cause the receiving web application to break. By using this setting
                     %% in conjunction with a dead letter exchange (and queue) it is possible to 
                     %% capture the offending messages, rather than have them end up back on the 
                     %% subscription queue and getting stuck in some sort of error loop.
