@@ -26,7 +26,7 @@ check_authentication(Req, Fun) ->
 check_authorization(Req, Resource, Username, PermissionsRequired, Fun) ->
     CheckResults = [catch rabbit_access_control:check_resource_access(
                             #user{username = list_to_binary(Username),
-                                         auth_backend = rabbit_auth_backend_internal},
+                                         authz_backends =[{rabbit_auth_backend_internal, none}]},
 			                 Resource, P)
 			|| P <- PermissionsRequired],
     case lists:foldl(fun check_authorization_result/2, ok, CheckResults) of
