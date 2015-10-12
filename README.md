@@ -76,6 +76,8 @@ To install from source (requires Erlang R15B01 or higher):
     make package
     cp dist/*.ez $RABBITMQ_HOME/plugins
 
+Note that Windows users can build the plugin using the commands under Cygwin. When working with Cygwin ensure that the Erlang bin directory is in your PATH (so that rebar can find erl and erlc) and that the zip utility is installed with your Cygwin installation (required to create the plugin ez file).
+
 Enable the plugin:
 
     rabbitmq-plugins enable rabbithub
