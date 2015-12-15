@@ -30,7 +30,7 @@ start(_Type, _StartArgs) ->
 
     {ok, Pid} = rabbithub_sup:start_link(),
     rabbithub_web:start(),
-    rabbithub_subscription:start_subscriptions(),
+	rabbithub_subscription:start_subscriptions(),
 
     rabbit_log:info("RabbitHub started~n"),
     rabbit_log:info("RabbitHub HTTP client options:~n~p~n", [Opts]),
@@ -196,32 +196,63 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
                    _  -> "&"
                end,
 
-           URL = Callback ++ C ++ mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}]),
+		   % Get the hub.topic part of the URL if the environment variable
+		   % indicates that it should be added as the PubSubHubBub specification
+		   % does not require it - default is to add the topic
+		   Topic = case application:get_env(rabbithub, append_hub_topic_to_callback) of
+				{ok, false} ->
+					"";
+				_ ->
+					C ++ mochiweb_util:urlencode([{'hub.topic', RoutingKeyBin}])
+		   end,
 
-           case httpc:request(post, {URL, 
-                                     [{"Content-length", integer_to_list(size(PayloadBin))},
-                                      {"Content-type", case ContentTypeBin of
-                                                          undefined -> "application/octet-stream";
-                                                          _ -> binary_to_list(ContentTypeBin)
-                                            end},
-                                      {"X-AMQP-Routing-Key", binary_to_list(RoutingKeyBin)} | ExtraHeaders], 
-                                     [], PayloadBin}, [], []) of
+           URL = Callback ++ Topic,
+
+		   Payload = {URL, 
+					 [{"Content-length", integer_to_list(size(PayloadBin))},
+					  {"Content-type", case ContentTypeBin of
+										  undefined -> "application/octet-stream";
+										  _ -> binary_to_list(ContentTypeBin)
+							end},
+					  {"X-AMQP-Routing-Key", binary_to_list(RoutingKeyBin)} | ExtraHeaders], 
+                      [], PayloadBin},
+
+		   % Log the request if the environment variable has been set - default
+		   % is not to log the request
+		   case application:get_env(rabbithub, log_http_post_request) of
+				{ok, true} ->
+					rabbit_log:info("RabbitHub post request~n~p~n", [Payload]);
+				_ ->
+					ok
+		   end,
+		   
+           case httpc:request(post, Payload, [], []) of
                {ok, {{_Version, StatusCode, _StatusText}, _Headers, _Body}} ->
                   if
                      StatusCode >= 200 andalso StatusCode < 300 ->
                          {ok, StatusCode};
                      true ->
-                         {error, StatusCode}
+                         {error, StatusCode, {{_Version, StatusCode, _StatusText}, _Headers, _Body}}
                   end;
                {error, Reason} ->
-                   {error, Reason}
+                   {error, Reason, {}}
             end;
         _ ->
-            {error, invalid_callback_url}
+            {error, invalid_callback_url, {}}
     end.
 
 
 error_and_unsub(Subscription, ErrorReport) ->
-    rabbit_log:error("RabbitHub unsubscribing~n~p~n", [ErrorReport]),
-    rabbithub_subscription:delete(Subscription),
+    rabbit_log:error("RabbitHub post error~n~p~n", [ErrorReport]),
+	
+	% Check the environment variable unsubscribe_on_http_post_error to 
+	% determine if the subscription should be deleted or not - default 
+	% is to unsubscribe on any post error
+	case application:get_env(rabbithub, unsubscribe_on_http_post_error) of
+		{ok, false} ->
+			ok;
+		_ ->
+		   rabbithub_subscription:delete(Subscription)
+	end,
+
     ok.
