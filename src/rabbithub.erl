@@ -208,15 +208,16 @@ deliver_via_post(#rabbithub_subscription{callback = Callback},
 
            URL = Callback ++ Topic,
 
+		   ContentType = case ContentTypeBin of
+							undefined -> "application/octet-stream";
+							_ -> binary_to_list(ContentTypeBin)
+						 end,
+
 		   Payload = {URL, 
 					 [{"Content-length", integer_to_list(size(PayloadBin))},
-					  {"Content-type", case ContentTypeBin of
-										  undefined -> "application/octet-stream";
-										  _ -> binary_to_list(ContentTypeBin)
-							end},
 					  {"X-AMQP-Routing-Key", binary_to_list(RoutingKeyBin)} | ExtraHeaders], 
-                      [], PayloadBin},
-
+                      ContentType, PayloadBin},
+						 
 		   % Log the request if the environment variable has been set - default
 		   % is not to log the request
 		   case application:get_env(rabbithub, log_http_post_request) of
