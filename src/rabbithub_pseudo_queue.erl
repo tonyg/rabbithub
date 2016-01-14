@@ -52,9 +52,9 @@ deliver(BasicMessage, Subscription, State) ->
     case rabbithub:deliver_via_post(Subscription, BasicMessage, []) of
         {ok, _} ->
             ok;
-        {error, Reason} ->
+        {error, Reason, Content} ->
             ok = rabbithub:error_and_unsub(Subscription,
-                                           {rabbithub_pseudo_queue, http_post_failure, Reason})
+                                           {rabbithub_pseudo_queue, http_post_failure, Reason, Content})
     end,
     {noreply, State}.
 

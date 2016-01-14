@@ -14,7 +14,7 @@ init([Lease = #rabbithub_lease{subscription = Subscription}]) ->
     process_flag(trap_exit, true),
     case rabbithub_subscription:register_subscription_pid(Lease, self(), ?MODULE) of
         ok ->
-            really_init(Subscription);
+           really_init(Subscription);
         expired ->
             {stop, normal};
         duplicate ->
@@ -36,9 +36,9 @@ really_init(Subscription = #rabbithub_subscription{resource = Resource}) ->
                         q_monitor_ref = MonRef,
                         consumer_tag = ConsumerTag}};
         {error, not_found} ->
-            ok = rabbithub:error_and_unsub(Subscription,
-                                           {rabbithub_consumer, queue_not_found, Subscription}),
-            {stop, not_found}
+			ok = rabbithub:error_and_unsub(Subscription,
+										   {rabbithub_consumer, queue_not_found, Subscription}),
+			{stop, not_found}
     end.
 
 handle_call(Request, _From, State) ->
@@ -58,7 +58,7 @@ handle_cast({deliver, _ConsumerTag, AckRequired,
                 false ->
                     ok
             end;
-        {error, Reason} ->
+        {error, Reason, Content} ->
             case is_integer(Reason) of 
                 true ->
                     %% If requeue_on_http_post_error is set to false then messages associated with
@@ -83,12 +83,12 @@ handle_cast({deliver, _ConsumerTag, AckRequired,
                            end;
                        _ ->
                            ok
-                       end;
+                    end;
                 false ->
                     ok
             end,
             ok = rabbithub:error_and_unsub(Subscription,
-                                           {rabbithub_consumer, http_post_failure, Reason})
+                                           {rabbithub_consumer, http_post_failure, Reason, Content})
     end,
     {noreply, State};
 handle_cast(shutdown, State) ->
