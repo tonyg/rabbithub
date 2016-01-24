@@ -11,6 +11,12 @@
 -export([respond_xml/5]).
 -export([deliver_via_post/3, error_and_unsub/2]).
 
+%% Start subscriptions via a bootstep only once networking is ready
+-rabbit_boot_step({?MODULE,
+                   [{description, "RabbitHub"},
+                    {mfa, {rabbithub_subscription, start_subscriptions, []}},
+                    {requires, networking}]}).
+
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
@@ -30,7 +36,7 @@ start(_Type, _StartArgs) ->
 
     {ok, Pid} = rabbithub_sup:start_link(),
     rabbithub_web:start(),
-	rabbithub_subscription:start_subscriptions(),
+%%%    rabbithub_subscription:start_subscriptions(),
 
     rabbit_log:info("RabbitHub started~n"),
     rabbit_log:info("RabbitHub HTTP client options:~n~p~n", [Opts]),

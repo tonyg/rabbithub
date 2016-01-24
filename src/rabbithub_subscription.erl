@@ -18,6 +18,13 @@ system_time() ->
     1000000 * (MegaSec * 1000000 + Sec) + MicroSec.
 
 start_subscriptions() ->
+    rabbit_log:info("Starting subscriptions...~n"),
+    %% If it's the first time the plugin is used or its a new Mnesia DB, there's a
+    %% chance the tables may not exist or are not available when we go looking for 
+    %% them, so just to be sure we try creating them here. If they already exist 
+    %% then no problem. Room for improvement here!
+    rabbithub:setup_schema(),
+
     {atomic, Leases} =
         mnesia:transaction(fun () ->
                                    mnesia:foldl(fun (Lease, Acc) -> [Lease | Acc] end,
