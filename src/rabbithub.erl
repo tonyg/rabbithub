@@ -11,12 +11,16 @@
 -export([respond_xml/5]).
 -export([deliver_via_post/3, error_and_unsub/2]).
 
-%% Start subscriptions via a bootstep only once networking is ready
+-export([init/1]).
+
+%% Start subscriptions via a bootstep only once routing is ready. Schema might
+%% already be set up, which is fine.
 -rabbit_boot_step({?MODULE,
                    [{description, "RabbitHub"},
+                    {mfa, {rabbithub, setup_schema, []}},
+                    {mfa, {rabbit_sup, start_child, [rabbithub_sup]}},
                     {mfa, {rabbithub_subscription, start_subscriptions, []}},
-                    {requires, networking}]}).
-
+                    {requires, routing_ready}]}).
 
 -include_lib("xmerl/include/xmerl.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
@@ -25,7 +29,13 @@
 
 
 start(_Type, _StartArgs) ->
-%% TBD - should check return status of a few things here!
+    hub_init(),
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+
+
+init([]) -> {ok, {{one_for_one, 1, 5}, []}}.
+
+hub_init() ->
     setup_schema(),
     ssl:start(),
 
@@ -33,14 +43,7 @@ start(_Type, _StartArgs) ->
     HttpOpts =  get_env(http_client_options, []), 
     ok = httpc:set_options(HttpOpts),
     {ok, Opts} = httpc:get_options(all),
-
-    {ok, Pid} = rabbithub_sup:start_link(),
-    rabbithub_web:start(),
-%%%    rabbithub_subscription:start_subscriptions(),
-
-    rabbit_log:info("RabbitHub started~n"),
-    rabbit_log:info("RabbitHub HTTP client options:~n~p~n", [Opts]),
-    {ok, Pid}.
+    rabbithub_web:start().
 
 
 stop(_State) ->
