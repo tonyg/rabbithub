@@ -44,7 +44,7 @@ message networks - for example, our public RabbitMQ instance,
 adapter, the [rabbitmq-xmpp][] plugin, and a bunch of our other
 experimental stuff, so you can do things like this:
 
-<img src="http://github.com/tonyg/rabbithub/raw/master/doc/rabbithub-example.png" alt="RabbitHub example configuration"/>
+![RabbitHub example configuration](doc/rabbithub-example.png)
 
  - become XMPP friends with `pshb@dev.rabbitmq.com` (the XMPP adapter
    gives each exchange a JID of its own)
